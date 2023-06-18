@@ -1,6 +1,6 @@
 {
 	"id": "obsidian-zotero-sync-client",
-	"name": "Zotero Sync Client",
+	"name": "Zotero Sync",
 	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
 	"description": "A Zotero Sync client for Obsidian",

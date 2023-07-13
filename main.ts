@@ -23,7 +23,7 @@ interface ZoteroSyncClientSettings {
 const DEFAULT_SETTINGS: ZoteroSyncClientSettings = {
 	api_key: '',
 	sync_on_startup: true,
-	show_ribbon_icon: false,
+	show_ribbon_icon: true,
 	sync_interval: 0,
 	note_generator: "return `# ${data.itemType}\n\n{${JSON.stringify(data)}}`",
 	filepath_generator: "return `References/${data.key}.md`",
@@ -35,6 +35,7 @@ export default class MyPlugin extends Plugin {
 	client: ZoteroAPI;
 	last_sync: Date;
 	interval: number;
+	ribbonIconEl: HTMLElement | null;
 
 	showError(exception: Error, kind: string) {
 		new Notice(`[${kind}] ${exception.message}`)
@@ -77,12 +78,7 @@ export default class MyPlugin extends Plugin {
 			}
 		})
 
-		// add ribbon icon
-		if (this.settings.show_ribbon_icon) {
-			const ribbonIconEl = this.addRibbonIcon('zotero', 'Sync with Zotero', (evt: MouseEvent) => {
-				this.sync()
-			});
-		}
+		this.updateRibbonBtn();
 
 		this.apply_sync_interval()
 
@@ -106,6 +102,18 @@ export default class MyPlugin extends Plugin {
 
 	onunload() {
 
+	}
+
+	updateRibbonBtn() {
+		if (this.ribbonIconEl) {
+			this.ribbonIconEl.remove();
+			this.ribbonIconEl = null;
+		}
+		if (this.settings.show_ribbon_icon) {
+			this.ribbonIconEl = this.addRibbonIcon('zotero', 'Sync with Zotero', (evt: MouseEvent) => {
+				this.sync()
+			});
+		}
 	}
 
 	getPluginPath(...append: string[]) {
@@ -163,7 +171,7 @@ export default class MyPlugin extends Plugin {
 			}
 		}
 
-		if (true) { // note: you may want to disable the sync during
+		if (false) { // note: you may want to disable the sync during
 					//       development to avoid hitting API limits
 			await this.syncWithZotero() 
 		}
@@ -446,6 +454,18 @@ class ClientSettingTab extends PluginSettingTab {
 					this.plugin.settings.sync_interval = isNaN(parseInt(value)) ? 0 : parseInt(value);
 					await this.plugin.saveSettings();
 					this.plugin.apply_sync_interval();
+				}
+			));
+
+		new Setting(containerEl)
+			.setName('Show sync ribbon button')
+			.setDesc('Offer a button in the ribbon menu to manually sync the library')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.show_ribbon_icon)
+				.onChange(async (value) => {
+					this.plugin.settings.show_ribbon_icon = value;
+					this.plugin.updateRibbonBtn();
+					await this.plugin.saveSettings();
 				}
 			));
 

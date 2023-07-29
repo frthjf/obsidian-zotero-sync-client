@@ -1,95 +1,33 @@
-# Obsidian Sample Plugin
+# Obsidian Zotero Sync Client
 
-This is a sample plugin for Obsidian (https://obsidian.md).
+This plugin leverages the Zotero Sync API to mirror your Zotero library as markdown files within Obsidian.
 
-This project uses Typescript to provide type checking and documentation.
-The repo depends on the latest plugin API (obsidian.d.ts) in Typescript Definition format, which contains TSDoc comments describing what it does.
+Zotero does not have to be installed since the data is directly obtained from Zotero's web API - all you need is an [Zotero API key](https://www.zotero.org/settings/keys/new) and internet connection when syncing.
 
-**Note:** The Obsidian API is still in early alpha and is subject to change at any time!
+Note that, by design, the synchronization is *read-only* and does not modify your Zotero library. Any changes to the markdown files will be lost and *not* synced back into Zotero. The rationale is to enable seamless Zotero integration via note linking and search while keeping all literature data within Zotero.
 
-This sample plugin demonstrates some of the basic functionality the plugin API can do.
-- Adds a ribbon icon, which shows a Notice when clicked.
-- Adds a command "Open Sample Modal" which opens a Modal.
-- Adds a plugin setting tab to the settings page.
-- Registers a global click event and output 'click' to the console.
-- Registers a global interval which logs 'setInterval' to the console.
+### Alternatives
 
-## First time developing plugins?
+This plugin is for you if you are interested in linking to and searching through a read-only version of your Zotero library within Obsidian. Check out the following alternatives if you are interested in:
 
-Quick starting guide for new plugin devs:
+- Taking notes directly within Zotero (with two-way sync to Obsidian): [Zotero Better Notes](https://github.com/windingwind/zotero-better-notes)
+- Importing citations on-demand into Obsidian: [Obsidian Zotero Integration](https://github.com/mgmeyers/obsidian-zotero-integration) or [Obsidian Citation Plugin](https://github.com/hans/obsidian-citation-plugin)
+- Integrating with Zotero via the ZotServer API: [Zotero Bridge](https://github.com/vanakat/zotero-bridge)
+- [Suggest other alternatives](https://github.com/frthjf/obsidian-zotero-sync-client/issues) ...
 
-- Check if [someone already developed a plugin for what you want](https://obsidian.md/plugins)! There might be an existing plugin similar enough that you can partner up with.
-- Make a copy of this repo as a template with the "Use this template" button (login to GitHub if you don't see it).
-- Clone your repo to a local development folder. For convenience, you can place this folder in your `.obsidian/plugins/your-plugin-name` folder.
-- Install NodeJS, then run `npm i` in the command line under your repo folder.
-- Run `npm run dev` to compile your plugin from `main.ts` to `main.js`.
-- Make changes to `main.ts` (or create new `.ts` files). Those changes should be automatically compiled into `main.js`.
-- Reload Obsidian to load the new version of your plugin.
-- Enable plugin in settings window.
-- For updates to the Obsidian API run `npm update` in the command line under your repo folder.
 
-## Releasing new releases
+## Usage
 
-- Update your `manifest.json` with your new version number, such as `1.0.1`, and the minimum Obsidian version required for your latest release.
-- Update your `versions.json` file with `"new-plugin-version": "minimum-obsidian-version"` so older versions of Obsidian can download an older version of your plugin that's compatible.
-- Create new GitHub release using your new version number as the "Tag version". Use the exact version number, don't include a prefix `v`. See here for an example: https://github.com/obsidianmd/obsidian-sample-plugin/releases
-- Upload the files `manifest.json`, `main.js`, `styles.css` as binary attachments. Note: The manifest.json file must be in two places, first the root path of your repository and also in the release.
-- Publish the release.
+Install the plugin and enable it in the settings. Generate a [Zotero API key](https://www.zotero.org/settings/keys/new) and fill it in the plugin settings.
 
-> You can simplify the version bump process by running `npm version patch`, `npm version minor` or `npm version major` after updating `minAppVersion` manually in `manifest.json`.
-> The command will bump version in `manifest.json` and `package.json`, and add the entry for the new version to `versions.json`
+The plugin will sync and cache all Zotero data incremently to minimize API usage.
 
-## Adding your plugin to the community plugin list
+After initial synchronization (which may take a while), all Zotero notes should appear in the configured vault folder.
 
-- Check https://github.com/obsidianmd/obsidian-releases/blob/master/plugin-review.md
-- Publish an initial version.
-- Make sure you have a `README.md` file in the root of your repo.
-- Make a pull request at https://github.com/obsidianmd/obsidian-releases to add your plugin.
+### Mobile devices
 
-## How to use
+While this plugin is only available on desktop, any generated Zotero markdown files will be synced to connected mobile clients just like any other file.
 
-- Clone this repo.
-- `npm i` or `yarn` to install dependencies
-- `npm run dev` to start compilation in watch mode.
+## Custom templates
 
-## Manually installing the plugin
-
-- Copy over `main.js`, `styles.css`, `manifest.json` to your vault `VaultFolder/.obsidian/plugins/your-plugin-id/`.
-
-## Improve code quality with eslint (optional)
-- [ESLint](https://eslint.org/) is a tool that analyzes your code to quickly find problems. You can run ESLint against your plugin to find common bugs and ways to improve your code. 
-- To use eslint with this project, make sure to install eslint from terminal:
-  - `npm install -g eslint`
-- To use eslint to analyze this project use this command:
-  - `eslint main.ts`
-  - eslint will then create a report with suggestions for code improvement by file and line number.
-- If your source code is in a folder, such as `src`, you can use eslint with this command to analyze all files in that folder:
-  - `eslint .\src\`
-
-## Funding URL
-
-You can include funding URLs where people who use your plugin can financially support it.
-
-The simple way is to set the `fundingUrl` field to your link in your `manifest.json` file:
-
-```json
-{
-    "fundingUrl": "https://buymeacoffee.com"
-}
-```
-
-If you have multiple URLs, you can also do:
-
-```json
-{
-    "fundingUrl": {
-        "Buy Me a Coffee": "https://buymeacoffee.com",
-        "GitHub Sponsor": "https://github.com/sponsors",
-        "Patreon": "https://www.patreon.com/"
-    }
-}
-```
-
-## API Documentation
-
-See https://github.com/obsidianmd/obsidian-api
+By default, the markdown files are generated using a standard template which can be previewed and modified in the settings, giving you full control over the file generation.

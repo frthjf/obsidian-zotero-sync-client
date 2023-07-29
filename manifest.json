@@ -3,7 +3,7 @@
 	"name": "Zotero Sync",
 	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
-	"description": "A Zotero Sync client for Obsidian",
+	"description": "A Zotero Sync client within your vault",
 	"author": "Frithjof Gressmann",
 	"authorUrl": "https://frthjf.com",
 	"isDesktopOnly": true

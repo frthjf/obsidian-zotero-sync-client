@@ -25,8 +25,37 @@ const DEFAULT_SETTINGS: ZoteroSyncClientSettings = {
 	sync_on_startup: true,
 	show_ribbon_icon: true,
 	sync_interval: 0,
-	note_generator: "return `# ${data.itemType}\n\n{${JSON.stringify(data)}}`",
-	filepath_generator: "return `References/${data.key}.md`",
+	note_generator: `let n = '# ' + data.title + '\\n\\n';
+if (data.date) {
+	n += data.date + '\\n';
+}
+
+if (data.creators) {
+	n += '\\n';
+	data.creators.forEach(author => {
+		n += '[[People/' + author.firstName + ' ' + author.lastName + ']] ';
+	});
+}
+
+n += '\\n\\n[Open in Zotero](zotero://select/library/items/' + data.key + ')\\n\\n';
+
+return n;`,
+
+	filepath_generator: `let fp = '';
+if (data.creators && data.creators.length > 0) {
+fp += data.creators[0]?.lastName;
+if (data.creators.length == 2) {
+	fp += '+';
+	fp += data.creators[1]?.lastName;
+} else if (data.creators.length > 2) {
+	fp += '+';
+}
+if (data.date) {
+	let year = new Date(data.date).getFullYear();
+	fp += year.toString();
+}
+return 'References/' + fp;
+}`,
 }
 
 export default class MyPlugin extends Plugin {
@@ -171,7 +200,7 @@ export default class MyPlugin extends Plugin {
 			}
 		}
 
-		if (false) { // note: you may want to disable the sync during
+		if (true) { // note: you may want to disable the sync during
 					//       development to avoid hitting API limits
 			await this.syncWithZotero() 
 		}
@@ -218,7 +247,7 @@ export default class MyPlugin extends Plugin {
 				if (!filePath) {
 					continue
 				}
-				const note = this.getMarker(element.key) + this.generateNote(element)
+				const note = this.getMarker(element.key) + this.generateNote(element) 
 				const hash = md5(note)
 				const key = element.key
 
@@ -341,7 +370,15 @@ export default class MyPlugin extends Plugin {
 			template = this.settings.filepath_generator
 		}
 		const parse = new Function('data', template)
-		return parse(data)
+		const result = parse(data)
+		if (result) {
+			if (result.endsWith('.md')) {
+				return result
+			}
+			return result + '.md'
+		} else {
+			return ""
+		}
 	}
 
 	generateNote(data, template = null) : string {
@@ -353,7 +390,7 @@ export default class MyPlugin extends Plugin {
 	}
 
 	getMarker(key: string) {
-		return `\n<!-- zotero_key: ${key} -->\n\n`
+		return `<!-- zotero_key: ${key} -->\n\n`
 	}
 	
 	async readLibrary(library: string) {
@@ -472,6 +509,7 @@ class ClientSettingTab extends PluginSettingTab {
 						await this.plugin.authenticate(value);
 						this.plugin.settings.api_key = value;
 						await this.plugin.saveSettings();
+						this.display();
 					} catch (e) {
 						this.plugin.showError(e, "Failed to authenticate with Zotero")
 					}
@@ -526,6 +564,8 @@ class ClientSettingTab extends PluginSettingTab {
 					this.plugin.clearCache();
 				})
 			);
+
+		if (this.plugin.client.libraries) {
 
 		const fpCodeEditor = document.createElement('textarea');
 		const ntCodeEditor = document.createElement('textarea');
@@ -750,5 +790,7 @@ class ClientSettingTab extends PluginSettingTab {
 		}
 
 		refreshPreview();
+
+		} // end of connected-only settings
 	}
 }

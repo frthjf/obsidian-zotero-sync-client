@@ -28,6 +28,9 @@ After initial synchronization (which may take a while), all Zotero notes should 
 
 While this plugin is only available on desktop, any generated Zotero markdown files will be synced to connected mobile clients just like any other file.
 
-## Custom templates
+### Custom templates
 
 By default, the markdown files are generated using a standard template which can be previewed and modified in the settings, giving you full control over the file generation.
+
+https://github.com/frthjf/obsidian-zotero-sync-client/assets/5411942/81a58562-af7a-4d74-a1c8-459dc78e116f
+

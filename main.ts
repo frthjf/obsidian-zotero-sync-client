@@ -1,13 +1,35 @@
-import { App, Plugin, PluginSettingTab, Setting, Notice, debounce, addIcon, prepareFuzzySearch } from 'obsidian';
-import { Sync as ZoteroAPI } from '@retorquere/zotero-sync'
+import { App, Plugin, PluginSettingTab, Setting, TFile, FileSystemAdapter, Notice, debounce, addIcon, prepareFuzzySearch, TAbstractFile } from 'obsidian';
+import { Sync as ZoteroAPI } from '@retorquere/zotero-sync/index'
 import { Store } from '@retorquere/zotero-sync/json-store'
 import { Zotero } from '@retorquere/zotero-sync/typings/zotero'
 import path from 'path';
 import fs from "fs";
 import crypto from "crypto";
 
-const md5 = (string: string) => {
+const md5 = (string: string) : string => {
 	return crypto.createHash('md5').update(string).digest('hex');
+}
+
+type ZoteroCollectionItem = Zotero.Collection["data"] & {
+	itemType: "collection";
+	children: ZoteroCollectionItem[];
+};
+
+type ZoteroItem = Zotero.Item.Any & {
+	children: ZoteroItem[];
+	parentItem: string;
+};
+
+type ZoteroNoteStatus = {
+	filePath: string;
+	hash: string;
+}
+
+type ZoteroRemoteLibrary = {
+    type: 'group' | 'user';
+    prefix: string;
+    name: string;
+    version?: number;
 }
 
 interface ZoteroSyncClientSettings {
@@ -24,6 +46,7 @@ const DEFAULT_SETTINGS: ZoteroSyncClientSettings = {
 	api_key: '',
 	sync_on_startup: true,
 	show_ribbon_icon: true,
+	sync_on_interval: false,
 	sync_interval: 0,
 	note_generator: `let n = '# ' + data.title + '\\n\\n';
 if (data.date) {
@@ -86,17 +109,19 @@ export default class MyPlugin extends Plugin {
 		// initialize the store which acts as a cache
 		this.store = new Store
 		const storeDirectory = this.getPluginPath("store")
-		if (!fs.existsSync(storeDirectory)) {
+		if (storeDirectory && !fs.existsSync(storeDirectory)) {
 			fs.mkdirSync(storeDirectory);
 		}
-		await this.store.load(storeDirectory)
+		if (storeDirectory) {
+			await this.store.load(storeDirectory)
+		}
 
 		// initialize the API client
 		this.client = new ZoteroAPI
 		this.client.on(ZoteroAPI.event.error, function() { console.log("ERROR!", [...arguments]) })
-		for (const event of [ ZoteroAPI.event.library, ZoteroAPI.event.collection, ZoteroAPI.event.item ]) {
-			this.client.on(event, (e => function() { console.log(e, [...arguments]) })(event))
-		}
+		// for (const event of [ ZoteroAPI.event.library, ZoteroAPI.event.collection, ZoteroAPI.event.item ]) {
+		// 	this.client.on(event, (e => function() { console.log(e, [...arguments]) })(event))
+		// }
 
 		// add commands
 		this.addCommand({
@@ -146,13 +171,15 @@ export default class MyPlugin extends Plugin {
 	}
 
 	getPluginPath(...append: string[]) {
-		return path.join(
-			this.app.vault.adapter.getBasePath(),
-			this.app.vault.configDir,
-			"plugins",
-			"obsidian-zotero-sync-client",
-			...append
-		)
+		if (this.app.vault.adapter instanceof FileSystemAdapter) {
+			 return path.join(
+				this.app.vault.adapter.getBasePath(),
+				this.app.vault.configDir,
+				"plugins",
+				"obsidian-zotero-sync-client",
+				...append
+			)
+		}
 	}
 
 	async loadSettings() {
@@ -221,67 +248,83 @@ export default class MyPlugin extends Plugin {
 		}
 	}
 
-	async applyUpdates(library: ZoteroAPI.RemoteLibrary) {
+	async applyUpdates(library: ZoteroRemoteLibrary) {
 		const data = await this.readLibrary(library.prefix)
 		const status = await this.readStatus(library.prefix)
 
 		// compute changes
-		const renames = {}
-		const updates = {}
-		const deletes = {}
-		const creates = {}
-		const updatedStatus = {
-			items: {},
-			collections: {}
+		const renames: {[key: string]: {
+			from: string, to: string, note: string
+		}} = {};
+		const updates: {[key: string]: {
+			filePath: string, note: string
+		}} = {};
+		const deletes: {[key: string]: string} = {};
+		const creates: {[key: string]: {
+			filePath: string, note: string
+		}} = {};
+		const updatedStatus: {
+			items: Map<string, ZoteroNoteStatus>;
+			collections: Map<string, ZoteroNoteStatus>;
+		} = {
+			items: new Map(),
+			collections: new Map()
+		};
+
+		// compute renames, updates, deletes, creates
+		const computeChanges = (element: ZoteroCollectionItem | ZoteroItem, status: Map<string, ZoteroNoteStatus>, updatedStatus: Map<string, ZoteroNoteStatus>) => {
+			const filePath = this.generateNoteFilePath(element)
+			// try {
+			// 	this.app.vault.checkPath(filePath)
+			// } catch (e) {
+			// 	console.log("Invalid path: " + filePath)
+			// 	throw e
+			// }
+			if (!filePath) {
+				return;
+			}
+			const note = this.getMarker(element.key) + this.generateNote(element) 
+			const hash = md5(note)
+			const key = element.key
+
+			// check if note exists
+			if (status.get(key)) {
+				// does it need to be renamed?
+				if (status.get(key)?.filePath != filePath) {
+					// rename
+					renames[key] = {from: status.get(key)?.filePath || '', to: filePath, note: note}
+				}
+				// does it need to be updated?
+				if (status.get(key)?.hash !== hash) {
+					// update
+					updates[key] = {filePath: filePath, note: note}
+				}
+
+				// done
+				status.delete(key)
+			} else {
+				// create
+				creates[key] = {filePath: filePath, note: note}
+			}
+
+			// add to updated status
+			updatedStatus.set(key, {
+				filePath: filePath,
+				hash: hash
+			})
 		}
 
-		for (const k of ['collections', 'items']) {
-			for (const element of data[k].values()) {
-				const filePath = this.generateNoteFilePath(element)
-				try {
-					this.app.vault.checkPath(filePath)
-				} catch (e) {
-					console.log("Invalid path: " + filePath)
-					throw e
-				}
-				if (!filePath) {
-					continue
-				}
-				const note = this.getMarker(element.key) + this.generateNote(element) 
-				const hash = md5(note)
-				const key = element.key
-
-				// check if note exists
-				if (status[k][key]) {
-					// does it need to be renamed?
-					if (status[k][key].filePath != filePath) {
-						// rename
-						renames[key] = {from: status[k][key].filePath, to: filePath, note: note}
-					}
-					// does it need to be updated?
-					if (status[k][key].hash !== hash) {
-						// update
-						updates[key] = {filePath: filePath, note: note}
-					}
-
-					// done
-					delete status[k][key]
-				} else {
-					// create
-					creates[key] = {filePath: filePath, note: note}
-				}
-
-				// add to updated status
-				updatedStatus[k][key] = {
-					filePath: filePath,
-					hash: hash
-				}
-			}
-
-			// delete remaining files
-			for (const element of Object.values(status[k])) {
-				deletes[element.key] = {filePath: element.filePath}
-			}
+		for (const element of data.collections.values()) {
+			computeChanges(element, status.collections, updatedStatus.collections)
+		}
+		for (const [key, element] of status.collections.entries()) {
+			deletes[key] = element.filePath
+		}
+		for (const element of data.items.values()) {
+			computeChanges(element, status.items, updatedStatus.items)
+		}
+		for (const [key, element] of status.items.entries()) {
+			deletes[key] = element.filePath
 		}
 
 		// apply changes
@@ -301,9 +344,9 @@ export default class MyPlugin extends Plugin {
 		}
 		for (const [key, value] of Object.entries(deletes)) {
 			try {
-				await this.deleteFile(value.filePath)
+				await this.deleteFile(value)
 			} catch (e) {
-				console.log("Failed to delete file: " + value.filePath + " (" + e.message + ")");
+				console.log("Failed to delete file: " + value + " (" + e.message + ")");
 			}
 		}
 		for (const [key, value] of Object.entries(creates)) {
@@ -318,19 +361,25 @@ export default class MyPlugin extends Plugin {
 		await this.writeStatus(library.prefix, updatedStatus)
 	}
 
-	aquireFile(filePath: string) {
-		// todo: check if file has been generated by this plugin
+	aquireFile(filePath: string) : TAbstractFile | null {
+		// TODO: enable optional safety check if file has been generated by this plugin
+		//       (e.g. by checking for the marker)
 		return this.app.vault.getAbstractFileByPath(filePath)
+	}
+
+	async ensureDirectoryExists(filePath: string) {
+		const p = path.dirname(filePath)
+		if (!await this.app.vault.adapter.exists(p)) {
+			await this.app.vault.createFolder(p)
+		}
 	}
 
 	async renameFile(oldPath: string, newPath: string, note: string) {
 		const fn = this.aquireFile(oldPath)
+		await this.ensureDirectoryExists(newPath)
 		if (!fn) {
-			await this.createFile(newPath, note)
+			await this.app.vault.create(newPath, note)
 		} else {
-			fs.mkdir(path.join(this.app.vault.adapter.getBasePath(), path.dirname(newPath)), {recursive: true}, (err) => {
-				if (err) throw err;
-			});
 			await this.app.vault.rename(fn, newPath)
 		}
 		
@@ -341,18 +390,16 @@ export default class MyPlugin extends Plugin {
 		if (!fn) {
 			await this.createFile(filePath, note)
 		} else {
-			await this.app.vault.modify(fn, note)
+			await this.app.vault.modify(fn as TFile, note)
 		}
 	}
 
 	async createFile(filePath: string, note: string) {
 		const fn = this.aquireFile(filePath)
 		if (fn) {
-			await this.app.vault.modify(fn, note)
+			await this.app.vault.modify(fn as TFile, note)
 		} else {
-			fs.mkdir(path.join(this.app.vault.adapter.getBasePath(), path.dirname(filePath)), {recursive: true}, (err) => {
-				if (err) throw err;
-			});
+			await this.ensureDirectoryExists(filePath)
 			await this.app.vault.create(filePath, note)
 		}
 	}
@@ -362,10 +409,10 @@ export default class MyPlugin extends Plugin {
 		if (!fn) {
 			return
 		}
-		await this.app.vault.delete(filePath)
+		await this.app.vault.delete(fn)
 	}
 
-	generateNoteFilePath(data, template = null) : string {
+	generateNoteFilePath(data: ZoteroItem | ZoteroCollectionItem, template: string | null = null) : string {
 		if (!template) {
 			template = this.settings.filepath_generator
 		}
@@ -381,7 +428,7 @@ export default class MyPlugin extends Plugin {
 		}
 	}
 
-	generateNote(data, template = null) : string {
+	generateNote(data: ZoteroItem | ZoteroCollectionItem, template: string | null = null) : string {
 		if (!template) {
 			template = this.settings.note_generator
 		}
@@ -393,13 +440,23 @@ export default class MyPlugin extends Plugin {
 		return `<!-- zotero_key: ${key} -->\n\n`
 	}
 	
-	async readLibrary(library: string) {
+	async readLibrary(library: string): Promise<{
+		collections: Map<string, ZoteroCollectionItem>;
+		items: Map<string, ZoteroItem>;
+	}> {
 		// read library data from store and organize into a map
 		try {
-			const data = JSON.parse(await fs.promises.readFile(this.getPluginPath("store", `${encodeURIComponent(library)}.json`), 'utf-8'))
-			let map = {
-				collections: new Map(data.collections.map((c: Zotero.Collection["data"]) => [c.key, c])),
-				items: new Map(data.items.map((i: Zotero.Item.Any) => [i.key, i]))
+			let data = [];
+			const dataFile = this.getPluginPath("store", `${encodeURIComponent(library)}.json`)
+			if (dataFile) {
+			 	data = JSON.parse(await fs.promises.readFile(dataFile, 'utf-8'))
+			}
+			let map: {
+				collections: Map<string, ZoteroCollectionItem>;
+				items: Map<string, ZoteroItem>;
+			} = {
+				collections: new Map(data.collections.map((c: ZoteroCollectionItem) => [c.key, c])),
+				items: new Map(data.items.map((i: ZoteroItem) => [i.key, i]))
 			}
 			// rewrite any collection with parentCollection key to be nested in its parent
 			for (const [key, collection] of map.collections) {
@@ -444,10 +501,21 @@ export default class MyPlugin extends Plugin {
 		}
 	}
 
-	async readStatus(library: string) {
+	async readStatus(library: string) : Promise<{
+		collections: Map<string, ZoteroNoteStatus>;
+		items: Map<string, ZoteroNoteStatus>;
+	 }> {
 		// read library status from store
 		try {
-			return JSON.parse(await fs.promises.readFile(this.getPluginPath("store", `${encodeURIComponent(library)}.status.json`), 'utf-8'))
+			const filePath = this.getPluginPath("store", `${encodeURIComponent(library)}.status.json`)
+			if (!filePath) {
+				throw new Error("Unable to read library status due to invalid path");
+			}
+			let data = JSON.parse(await fs.promises.readFile(filePath, 'utf-8'))
+			return {
+				collections: new Map(data.collections.entries()),
+				items: new Map(data.items.entries())
+			}
 		} catch (e) {
 			return {
 				collections: new Map(),
@@ -459,7 +527,10 @@ export default class MyPlugin extends Plugin {
 	async writeStatus(library: string, status: any) {
 		// write library status to store
 		try {
-			await fs.promises.writeFile(this.getPluginPath("store", `${encodeURIComponent(library)}.status.json`), JSON.stringify(status))
+			const filePath = this.getPluginPath("store", `${encodeURIComponent(library)}.status.json`)
+			if (filePath) {
+				await fs.promises.writeFile(filePath, JSON.stringify(status))
+			}
 		} catch (e) {
 			throw new Error("Unable to write library status: " + e.message);
 		}
@@ -468,7 +539,10 @@ export default class MyPlugin extends Plugin {
 	async clearStatus(library: string) {
 		// clear library status from store
 		try {
-			await fs.promises.unlink(this.getPluginPath("store", `${encodeURIComponent(library)}.status.json`))
+			const filePath = this.getPluginPath("store", `${encodeURIComponent(library)}.status.json`)
+			if (filePath) {
+				await fs.promises.unlink(filePath)
+			}
 		} catch (e) {
 			throw new Error("Unable to clear library status: " + e.message);
 		}
@@ -556,7 +630,7 @@ class ClientSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName('Caching')
 			.setDesc(
-				'Note files are cached to improve performance; if you make changes to the note files outside of Obsidian, you can use this button to clear the cache.'
+				'Generated Zotero note files are cached to improve performance; if you make changes to the note files when not using the pluign, you can use this button to clear the cache.'
 			)
 			.addButton(button => button
 				.setButtonText('Clear cache')
@@ -581,12 +655,15 @@ class ClientSettingTab extends PluginSettingTab {
 				.setButtonText('Apply')
 				.onClick(async () => {
 					// save settings
+					button.setDisabled(true);
 					this.plugin.settings.filepath_generator = fpCodeEditor.value
 					this.plugin.settings.note_generator = ntCodeEditor.value
 					await this.plugin.saveSettings();
 					// apply changes
-					this.plugin.applyAllUpdates();
+					new Notice('Updating vault (this may take a while)');
+					await this.plugin.applyAllUpdates();
 					new Notice('Applied changes');
+					button.setDisabled(false);
 				})
 			);
 
@@ -710,7 +787,7 @@ class ClientSettingTab extends PluginSettingTab {
 			}
 
 			// update preview
-			const element = data.items.get(fileSelect.value);
+			const element = data.items.get(fileSelect.value) || {} as ZoteroItem;
 			const previewType = ntPreviewToggle.value;
 			if (previewType === 'md') {
 				try {

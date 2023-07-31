@@ -1,4 +1,4 @@
-import { App, Plugin, PluginSettingTab, Setting, TFile, FileSystemAdapter, Notice, debounce, addIcon, prepareFuzzySearch, TAbstractFile } from 'obsidian';
+import { App, Plugin, PluginSettingTab, Setting, TFile, FileSystemAdapter, normalizePath, Notice, debounce, addIcon, prepareFuzzySearch, TAbstractFile } from 'obsidian';
 import { Sync as ZoteroAPI } from '@retorquere/zotero-sync/index'
 import { Store } from '@retorquere/zotero-sync/json-store'
 import { Zotero } from '@retorquere/zotero-sync/typings/zotero'
@@ -227,12 +227,12 @@ export default class MyPlugin extends Plugin {
 			}
 		}
 
-		if (true) { // note: you may want to disable the sync during
+		if (false) { // note: you may want to disable the sync during
 					//       development to avoid hitting API limits
 			await this.syncWithZotero() 
 		}
 
-		this.applyAllUpdates()
+		await this.applyAllUpdates()
 		
 		this.last_sync = new Date()
 	}
@@ -274,12 +274,6 @@ export default class MyPlugin extends Plugin {
 		// compute renames, updates, deletes, creates
 		const computeChanges = (element: ZoteroCollectionItem | ZoteroItem, status: Map<string, ZoteroNoteStatus>, updatedStatus: Map<string, ZoteroNoteStatus>) => {
 			const filePath = this.generateNoteFilePath(element)
-			// try {
-			// 	this.app.vault.checkPath(filePath)
-			// } catch (e) {
-			// 	console.log("Invalid path: " + filePath)
-			// 	throw e
-			// }
 			if (!filePath) {
 				return;
 			}
@@ -420,9 +414,9 @@ export default class MyPlugin extends Plugin {
 		const result = parse(data)
 		if (result) {
 			if (result.endsWith('.md')) {
-				return result
+				return normalizePath(result)
 			}
-			return result + '.md'
+			return normalizePath(result + '.md')
 		} else {
 			return ""
 		}
@@ -446,10 +440,17 @@ export default class MyPlugin extends Plugin {
 	}> {
 		// read library data from store and organize into a map
 		try {
-			let data = [];
+			let data = {
+				collections: [],
+				items: []
+			};
 			const dataFile = this.getPluginPath("store", `${encodeURIComponent(library)}.json`)
 			if (dataFile) {
-			 	data = JSON.parse(await fs.promises.readFile(dataFile, 'utf-8'))
+				try {
+			 		data = JSON.parse(await fs.promises.readFile(dataFile, 'utf-8'))
+				} catch (e) {
+					// pass
+				}
 			}
 			let map: {
 				collections: Map<string, ZoteroCollectionItem>;
@@ -511,7 +512,7 @@ export default class MyPlugin extends Plugin {
 			if (!filePath) {
 				throw new Error("Unable to read library status due to invalid path");
 			}
-			let data = JSON.parse(await fs.promises.readFile(filePath, 'utf-8'))
+			const data = JSON.parse(await fs.promises.readFile(filePath, 'utf-8'))
 			return {
 				collections: new Map(data.collections.entries()),
 				items: new Map(data.items.entries())
@@ -552,7 +553,7 @@ export default class MyPlugin extends Plugin {
 		for (const library of Object.values(this.client.libraries)) {
 			await this.clearStatus(library.prefix)
 		}
-		new Notice(`Cleared cache`)
+		new Notice(`Zotero Sync: Cleared cache`)
 	}
 
 }
@@ -570,8 +571,6 @@ class ClientSettingTab extends PluginSettingTab {
 
 		containerEl.empty();
 
-		containerEl.createEl('h2', {text: 'Zotero API'});
-
 		new Setting(containerEl)
 			.setName('API key')
 			.setDesc('Zotero API key for read-only access')
@@ -583,6 +582,9 @@ class ClientSettingTab extends PluginSettingTab {
 						await this.plugin.authenticate(value);
 						this.plugin.settings.api_key = value;
 						await this.plugin.saveSettings();
+						new Notice(`Authenticated with Zotero, syncing libraries. This may take a while...`)
+						await this.plugin.sync();
+						new Notice(`Zotero Sync complete.`)
 						this.display();
 					} catch (e) {
 						this.plugin.showError(e, "Failed to authenticate with Zotero")
@@ -627,10 +629,12 @@ class ClientSettingTab extends PluginSettingTab {
 				}
 			));
 
+		containerEl.createEl('h2', {text: 'Note generation'});
+
 		new Setting(containerEl)
 			.setName('Caching')
 			.setDesc(
-				'Generated Zotero note files are cached to improve performance; if you make changes to the note files when not using the pluign, you can use this button to clear the cache.'
+				'Generated Zotero note files are cached to improve performance; if you make changes to the note files when not using the plugin, you can use this button to clear the cache.'
 			)
 			.addButton(button => button
 				.setButtonText('Clear cache')
@@ -645,7 +649,7 @@ class ClientSettingTab extends PluginSettingTab {
 		const ntCodeEditor = document.createElement('textarea');
 
 		new Setting(containerEl)
-			.setName('Note generation')
+			.setName('Template')
 			.setDesc(
 				'The JavaScript code in the left column below is used to generate the notes from items in your Zotero library.' +
 				' You can preview code changes by selecting a file from the preview list. ' +
@@ -660,9 +664,9 @@ class ClientSettingTab extends PluginSettingTab {
 					this.plugin.settings.note_generator = ntCodeEditor.value
 					await this.plugin.saveSettings();
 					// apply changes
-					new Notice('Updating vault (this may take a while)');
+					new Notice('Zotero Sync: Updating vault (this may take a while)');
 					await this.plugin.applyAllUpdates();
-					new Notice('Applied changes');
+					new Notice('Zotero Sync: Vault updated');
 					button.setDisabled(false);
 				})
 			);
@@ -711,7 +715,6 @@ class ClientSettingTab extends PluginSettingTab {
 
 
 		// Note generation elements
-
 		const ntMsg = document.createElement("div");
 		ntMsg.style.padding = '5px';
 		ntMsg.style.fontSize = '10pt';
@@ -816,6 +819,7 @@ class ClientSettingTab extends PluginSettingTab {
 
 		
 		// Form grid layout
+		const codeFont = 'Menlo, SFMono-Regular, Consolas, "Roboto Mono", "Source Code Pro", monospace';
 		const table = containerEl.createEl("table");
 		table.style.width = "100%";
 		table.style.height = "100%";
@@ -838,6 +842,8 @@ class ClientSettingTab extends PluginSettingTab {
 					fpCodeEditor.style.width = "100%";
 					fpCodeEditor.style.minHeight = "200px";
 					fpCodeEditor.style.flexGrow = "1";
+					fpCodeEditor.style.fontFamily = codeFont;
+					fpCodeEditor.style.fontSize = '9pt';
 				} else if (i === 0 && j === 1) {
 					if (libraryCount > 1) {
 						formContainer.appendChild(librarySelect);
@@ -853,6 +859,8 @@ class ClientSettingTab extends PluginSettingTab {
 					ntCodeEditor.style.width = "100%";
 					ntCodeEditor.style.minHeight = "200px";
 					ntCodeEditor.style.flexGrow = "1";
+					ntCodeEditor.style.fontFamily = codeFont;
+					ntCodeEditor.style.fontSize = '9pt';
 				} else if (i === 1 && j === 1) {
 					formContainer.appendChild(ntPreviewToggle);
 					formContainer.appendChild(ntPreview);

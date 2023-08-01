@@ -71,20 +71,20 @@ if (data.creators) {
 	data.creators.forEach(author => {
 	n += '[[People/' + author.firstName + ' ' + author.lastName + ']] '; 
 	});
-	n += '\n';
+	n += '\\n';
 }
 n += '# ' + data.title;
 if (data.date) {
 	let year = new Date(data.date).getFullYear();
 	n += ' (' + year.toString() + ')';
 }
-n += '\n\n';
+n += '\\n\\n';
 if (data.children) {
 	const notes = data.children.filter(
 		c => c.itemType.toLowerCase() == 'note'
 	)
 	notes.forEach(c => {
-		n += c.note_markdown + '\n\n';
+		n += c.note_markdown + '\\n\\n';
 	});
 }
 return n;`,

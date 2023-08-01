@@ -238,13 +238,13 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 			}
 		}
 
-		if (true) { // note: you may want to disable the sync during
+		if (false) { // note: you may want to disable the sync during
 					//       development to avoid hitting API limits
 			await this.syncWithZotero() 
 		}
 
 		await this.applyAllUpdates()
-		
+
 		this.last_sync = new Date()
 	}
 
@@ -262,7 +262,6 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 	async applyUpdates(library: ZoteroRemoteLibrary) {
 		const data = await this.readLibrary(library.prefix)
 		const status = await this.readStatus(library.prefix)
-
 		// compute changes
 		const renames: {[key: string]: {
 			from: string, to: string, note: string
@@ -284,14 +283,22 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 
 		// compute renames, updates, deletes, creates
 		const computeChanges = (element: ZoteroCollectionItem | ZoteroItem, status: Map<string, ZoteroNoteStatus>, updatedStatus: Map<string, ZoteroNoteStatus>) => {
+			const key = element.key
 			const filePath = this.generateNoteFilePath(element)
 			if (!filePath) {
+				// delete
+				const i = status.get(key)
+				if (i?.filePath) {
+					deletes[key] = i.filePath
+				}
+				if (i) {
+					status.delete(key)
+				}
 				return;
 			}
 			const note = this.getMarker(element) + this.generateNote(element) 
 			const hash = md5(note)
-			const key = element.key
-
+			
 			// check if note exists
 			if (status.get(key)) {
 				// does it need to be renamed?
@@ -322,14 +329,8 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 		for (const element of data.collections.values()) {
 			computeChanges(element, status.collections, updatedStatus.collections)
 		}
-		for (const [key, element] of status.collections.entries()) {
-			deletes[key] = element.filePath
-		}
 		for (const element of data.items.values()) {
 			computeChanges(element, status.items, updatedStatus.items)
-		}
-		for (const [key, element] of status.items.entries()) {
-			deletes[key] = element.filePath
 		}
 
 		// apply changes
@@ -533,8 +534,8 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 			}
 			const data = JSON.parse(await fs.promises.readFile(filePath, 'utf-8'))
 			return {
-				collections: new Map(data.collections.entries()),
-				items: new Map(data.items.entries())
+				collections: new Map(data.collections),
+				items: new Map(data.items)
 			}
 		} catch (e) {
 			return {
@@ -549,7 +550,10 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 		try {
 			const filePath = this.getPluginPath("store", `${encodeURIComponent(library)}.status.json`)
 			if (filePath) {
-				await fs.promises.writeFile(filePath, JSON.stringify(status))
+				await fs.promises.writeFile(filePath, JSON.stringify({
+					collections: Array.from(status.collections.entries()),
+					items: Array.from(status.items.entries())
+				}))
 			}
 		} catch (e) {
 			throw new Error("Unable to write library status: " + e.message);
@@ -828,7 +832,6 @@ class ClientSettingTab extends PluginSettingTab {
 
 		
 		// Form grid layout
-		const codeFont = 'Menlo, SFMono-Regular, Consolas, "Roboto Mono", "Source Code Pro", monospace';
 		const table = containerEl.createEl("table");
 		table.classList.add('form-grid');
 		for (let i = 0; i < 2; i++) {

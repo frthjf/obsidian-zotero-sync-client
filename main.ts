@@ -66,20 +66,27 @@ const DEFAULT_SETTINGS: ZoteroSyncClientSettings = {
 	show_ribbon_icon: true,
 	sync_on_interval: false,
 	sync_interval: 0,
-	note_generator: `let n = '# ' + data.title + '\\n\\n';
-if (data.date) {
-	n += data.date + '\\n';
-}
-
+	note_generator: `let n = '';
 if (data.creators) {
-	n += '\\n';
 	data.creators.forEach(author => {
-		n += '[[People/' + author.firstName + ' ' + author.lastName + ']] ';
+	n += '[[People/' + author.firstName + ' ' + author.lastName + ']] '; 
+	});
+	n += '\n';
+}
+n += '# ' + data.title;
+if (data.date) {
+	let year = new Date(data.date).getFullYear();
+	n += ' (' + year.toString() + ')';
+}
+n += '\n\n';
+if (data.children) {
+	const notes = data.children.filter(
+		c => c.itemType.toLowerCase() == 'note'
+	)
+	notes.forEach(c => {
+		n += c.note_markdown + '\n\n';
 	});
 }
-
-n += '\\n\\n[Open in Zotero](zotero://select/library/items/' + data.key + ')\\n\\n';
-
 return n;`,
 
 	filepath_generator: `let fp = '';
@@ -119,7 +126,7 @@ export default class MyPlugin extends Plugin {
 					<path d="M1470 12796 c0 -2 -113 -492 -251 -1088 -137 -595 -299 -1296 -360 -1557 -60 -261 -109 -480 -109 -487 0 -12 411 -14 2573 -16 l2572 -3 -2947 -4688 -2948 -4688 0 -135 0 -134 5365 0 c2951 0 5365 2 5365 5 0 2 68 267 151 587 83 321 251 974 375 1452 l224 868 0 119 0 119 -2939 2 -2938 3 2938 4688 2939 4688 0 135 0 134 -5005 0 c-2753 0 -5005 -2 -5005 -4z"/>
 				</g>
 			</svg>`
-	   );
+	   	);
 
 		await this.loadSettings();
 		this.addSettingTab(new ClientSettingTab(this.app, this));
@@ -245,7 +252,7 @@ export default class MyPlugin extends Plugin {
 			}
 		}
 
-		if (false) { // note: you may want to disable the sync during
+		if (true) { // note: you may want to disable the sync during
 					//       development to avoid hitting API limits
 			await this.syncWithZotero() 
 		}
@@ -295,7 +302,7 @@ export default class MyPlugin extends Plugin {
 			if (!filePath) {
 				return;
 			}
-			const note = this.getMarker(element.key) + this.generateNote(element) 
+			const note = this.getMarker(element) + this.generateNote(element) 
 			const hash = md5(note)
 			const key = element.key
 
@@ -448,8 +455,11 @@ export default class MyPlugin extends Plugin {
 		return parse(data)
 	}
 
-	getMarker(key: string) {
-		return `<!-- zotero_key: ${key} -->\n\n`
+	getMarker(element: ZoteroCollectionItem | ZoteroItem) {
+		// Unique marker to identify note `<!-- zotero_key: ${key} -->`
+		// This is prepended automatically and cannot be edited by the user
+		const kind = element.itemType.toLowerCase() == "collection" ? "collections" : "items"
+		return `[🇿](zotero://select/library/${kind}/${element.key})\n\n`
 	}
 	
 	async readLibrary(library: string): Promise<{

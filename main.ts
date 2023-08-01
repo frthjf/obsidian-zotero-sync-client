@@ -36,6 +36,7 @@ interface ZoteroNoteItem extends Zotero.Item.Note {
 type ZoteroItem = Zotero.Item.Any & ZoteroNoteItem & {
 	children: ZoteroItem[];
 	parentItem: string;
+	super_collections: string[];
 };
 
 type ZoteroNoteStatus = {
@@ -498,6 +499,18 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 					parent.children.push(collection)
 				}
 			}
+			const findSuperCollections = (collectionKey: string) : string[] => {
+				let collection = map.collections.get(collectionKey)
+				if (!collection) {
+					return []
+				}
+				const collections : string[] = [collection.key]
+				if (collection.parentCollection) {
+					collections.push(...findSuperCollections(collection.parentCollection))
+				}
+				return collections
+			}
+
 			// rewrite any item with parentItem key to be nested in its parent
 			for (const [key, item] of map.items) {
 				if (!item.children) {
@@ -513,6 +526,11 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 					}
 					parent.children.push(item)
 					map.items.delete(key)
+				}
+				if (item.collections) {
+					item.collections.forEach((collectionKey: string) => {
+						item.super_collections = findSuperCollections(collectionKey)
+					})
 				}
 			}
 			

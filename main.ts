@@ -385,7 +385,7 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 		if (!fn) {
 			await this.app.vault.create(newPath, note)
 		} else {
-			await await this.app.fileManager.renameFile(fn, newPath);
+			await this.app.fileManager.renameFile(fn, newPath);
 		}
 		
 	}

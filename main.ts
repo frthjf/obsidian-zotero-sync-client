@@ -53,7 +53,6 @@ type ZoteroRemoteLibrary = {
 interface ZoteroSyncClientSettings {
 	api_key: string;
 	sync_on_startup: boolean;
-	show_ribbon_icon: boolean;
 	sync_on_interval: boolean;
 	sync_interval: number;
 	note_generator: string;
@@ -63,7 +62,6 @@ interface ZoteroSyncClientSettings {
 const DEFAULT_SETTINGS: ZoteroSyncClientSettings = {
 	api_key: '',
 	sync_on_startup: true,
-	show_ribbon_icon: true,
 	sync_on_interval: false,
 	sync_interval: 0,
 	note_generator: `let n = '';
@@ -112,7 +110,6 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 	client: ZoteroAPI;
 	last_sync: Date;
 	interval: number;
-	ribbonIconEl: HTMLElement | null;
 
 	showError(exception: Error, kind: string) {
 		new Notice(`[${kind}] ${exception.message}`)
@@ -148,7 +145,6 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 		// 	this.client.on(event, (e => function() { console.log(e, [...arguments]) })(event))
 		// }
 
-		// add commands
 		this.addCommand({
 			id: 'sync',
 			name: 'Sync with Zotero',
@@ -157,7 +153,9 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 			}
 		})
 
-		this.updateRibbonBtn();
+		this.addRibbonIcon('zotero', 'Sync with Zotero', (evt: MouseEvent) => {
+			this.sync()
+		});
 
 		this.applySyncInterval()
 
@@ -181,18 +179,6 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 
 	onunload() {
 
-	}
-
-	updateRibbonBtn() {
-		if (this.ribbonIconEl) {
-			this.ribbonIconEl.remove();
-			this.ribbonIconEl = null;
-		}
-		if (this.settings.show_ribbon_icon) {
-			this.ribbonIconEl = this.addRibbonIcon('zotero', 'Sync with Zotero', (evt: MouseEvent) => {
-				this.sync()
-			});
-		}
 	}
 
 	getPluginPath(...append: string[]) {
@@ -592,9 +578,9 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 }
 
 class ClientSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
+	plugin: ZoteroSyncClientPlugin;
 
-	constructor(app: App, plugin: MyPlugin) {
+	constructor(app: App, plugin: ZoteroSyncClientPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
@@ -649,18 +635,6 @@ class ClientSettingTab extends PluginSettingTab {
 					this.plugin.settings.sync_interval = isNaN(parseInt(value)) ? 0 : parseInt(value);
 					await this.plugin.saveSettings();
 					this.plugin.applySyncInterval();
-				}
-			));
-
-		new Setting(containerEl)
-			.setName('Show sync ribbon button')
-			.setDesc('Offer a button in the ribbon menu to manually sync the library')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.show_ribbon_icon)
-				.onChange(async (value) => {
-					this.plugin.settings.show_ribbon_icon = value;
-					this.plugin.updateRibbonBtn();
-					await this.plugin.saveSettings();
 				}
 			));
 

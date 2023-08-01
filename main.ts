@@ -1,4 +1,18 @@
-import { App, Plugin, PluginSettingTab, Setting, TFile, FileSystemAdapter, normalizePath, Notice, debounce, addIcon, prepareFuzzySearch, TAbstractFile } from 'obsidian';
+import { 
+	App, 
+	Plugin, 
+	PluginSettingTab, 
+	Setting, 
+	TFile, 
+	FileSystemAdapter, 
+	htmlToMarkdown, 
+	normalizePath, 
+	Notice, 
+	debounce, 
+	addIcon, 
+	prepareFuzzySearch, 
+	TAbstractFile 
+} from 'obsidian';
 import { Sync as ZoteroAPI } from '@retorquere/zotero-sync/index'
 import { Store } from '@retorquere/zotero-sync/json-store'
 import { Zotero } from '@retorquere/zotero-sync/typings/zotero'
@@ -15,7 +29,11 @@ type ZoteroCollectionItem = Zotero.Collection["data"] & {
 	children: ZoteroCollectionItem[];
 };
 
-type ZoteroItem = Zotero.Item.Any & {
+interface ZoteroNoteItem extends Zotero.Item.Note {
+	note_markdown: string;
+}
+
+type ZoteroItem = Zotero.Item.Any & ZoteroNoteItem & {
 	children: ZoteroItem[];
 	parentItem: string;
 };
@@ -457,7 +475,12 @@ export default class MyPlugin extends Plugin {
 				items: Map<string, ZoteroItem>;
 			} = {
 				collections: new Map(data.collections.map((c: ZoteroCollectionItem) => [c.key, c])),
-				items: new Map(data.items.map((i: ZoteroItem) => [i.key, i]))
+				items: new Map(data.items.map((i: ZoteroItem) => {
+					if (i.itemType.toLowerCase() === 'note' && i.note) {
+						i.note_markdown = htmlToMarkdown(i.note);
+					}
+					return [i.key, i]
+				}))
 			}
 			// rewrite any collection with parentCollection key to be nested in its parent
 			for (const [key, collection] of map.collections) {

@@ -239,7 +239,7 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 			}
 		}
 
-		if (false) { // note: you may want to disable the sync during
+		if (true) { // note: you may want to disable the sync during
 					//       development to avoid hitting API limits
 			await this.syncWithZotero() 
 		}

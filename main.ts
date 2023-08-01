@@ -106,7 +106,7 @@ return 'References/' + fp;
 }`,
 }
 
-export default class MyPlugin extends Plugin {
+export default class ZoteroSyncClientPlugin extends Plugin {
 	settings: ZoteroSyncClientSettings;
 	store: Store;
 	client: ZoteroAPI;
@@ -399,7 +399,7 @@ export default class MyPlugin extends Plugin {
 		if (!fn) {
 			await this.app.vault.create(newPath, note)
 		} else {
-			await this.app.vault.rename(fn, newPath)
+			await await this.app.fileManager.renameFile(fn, newPath);
 		}
 		
 	}

@@ -34,3 +34,5 @@ By default, the markdown files are generated using a standard template which can
 
 https://github.com/frthjf/obsidian-zotero-sync-client/assets/5411942/81a58562-af7a-4d74-a1c8-459dc78e116f
 
+Note: This plugin uses the excellent [retorquere/zotero-sync](https://github.com/retorquere/zotero-sync) package for the Zotero API integration.
+

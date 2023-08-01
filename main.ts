@@ -604,6 +604,8 @@ class ClientSettingTab extends PluginSettingTab {
 
 		containerEl.empty();
 
+		containerEl.classList.add('zotero-sync-settings');
+
 		new Setting(containerEl)
 			.setName('API key')
 			.setDesc('Zotero API key for read-only access')
@@ -679,7 +681,9 @@ class ClientSettingTab extends PluginSettingTab {
 		if (this.plugin.client.libraries) {
 
 		const fpCodeEditor = document.createElement('textarea');
+		fpCodeEditor.classList.add('filepath-code-editor');
 		const ntCodeEditor = document.createElement('textarea');
+		ntCodeEditor.classList.add('note-code-editor');
 
 		new Setting(containerEl)
 			.setName('Template')
@@ -707,8 +711,7 @@ class ClientSettingTab extends PluginSettingTab {
 		// Filepath generation elements
 
 		const librarySelect = document.createElement('select');
-		librarySelect.style.display = 'flex';
-		librarySelect.style.flexDirection = 'row';
+		librarySelect.classList.add('library-select');
 		let libraryCount = 0;
 		for (const library of Object.values(this.plugin.client.libraries)) {
 			const option = document.createElement('option');
@@ -719,19 +722,20 @@ class ClientSettingTab extends PluginSettingTab {
 		}
 		
 		const fpMsg = document.createElement("div");
+		fpMsg.classList.add('fp-msg');
 		fpMsg.innerText = 'Use `data` to access the Zotero item data and return a relative filepath. '
 					+ 'You may return an empty string to skip note generation for the item. ';
-		fpMsg.style.padding = '5px';
-		fpMsg.style.fontSize = '10pt';
 
 
 		fpCodeEditor.value = this.plugin.settings.filepath_generator;
 
 		const filterInput = document.createElement('input');
+		filterInput.classList.add('filter-input');
 		filterInput.type = 'text';
 		filterInput.placeholder = 'Filter files';
 	
 		const fileSelect = document.createElement('select');
+		fileSelect.classList.add('file-select');
 		fileSelect.multiple = true;
 		fileSelect.style.border =  'none';
 
@@ -749,13 +753,13 @@ class ClientSettingTab extends PluginSettingTab {
 
 		// Note generation elements
 		const ntMsg = document.createElement("div");
-		ntMsg.style.padding = '5px';
-		ntMsg.style.fontSize = '10pt';
+		ntMsg.classList.add('nt-msg');
 		ntMsg.innerText = 'Use `data` to access the Zotero item data and return the note content';
 
 		ntCodeEditor.value = this.plugin.settings.note_generator;
 
 		const ntPreviewToggle = document.createElement('select');
+		ntPreviewToggle.classList.add('nt-preview-toggle');
 		const options = {
 			// md_prev: 'View markdown preview', 
 			md: 'View generated markdown source', 
@@ -769,10 +773,8 @@ class ClientSettingTab extends PluginSettingTab {
 		});
 		
 		const ntPreview = document.createElement('pre');
-		ntPreview.style.fontSize = '9pt';
-		ntPreview.style.overflow = 'auto';
-		ntPreview.style.padding = '3px';
-		ntPreview.innerText = '';
+		ntPreview.classList.add('nt-preview');
+		ntPreview.empty();
 
 		// Refresh preview logic
 		const refreshPreview = async () => {
@@ -854,51 +856,30 @@ class ClientSettingTab extends PluginSettingTab {
 		// Form grid layout
 		const codeFont = 'Menlo, SFMono-Regular, Consolas, "Roboto Mono", "Source Code Pro", monospace';
 		const table = containerEl.createEl("table");
-		table.style.width = "100%";
-		table.style.height = "100%";
-		table.style.marginTop = "10px";
-		table.style.tableLayout = "fixed";
+		table.classList.add('form-grid');
 		for (let i = 0; i < 2; i++) {
 			const row = document.createElement("tr");
 			for (let j = 0; j < 2; j++) {
 				const cell = document.createElement("td");
-				cell.style.verticalAlign = "top";
 
 				const formContainer = document.createElement("div");
-				formContainer.style.display = "flex";
-				formContainer.style.flexDirection = "column";
-				formContainer.style.height = "100%";
+				formContainer.classList.add('form-container');
 
 				if (i === 0 && j === 0) {
 					formContainer.appendChild(fpMsg);
 					formContainer.appendChild(fpCodeEditor);
-					fpCodeEditor.style.width = "100%";
-					fpCodeEditor.style.minHeight = "200px";
-					fpCodeEditor.style.flexGrow = "1";
-					fpCodeEditor.style.fontFamily = codeFont;
-					fpCodeEditor.style.fontSize = '9pt';
 				} else if (i === 0 && j === 1) {
 					if (libraryCount > 1) {
 						formContainer.appendChild(librarySelect);
 					}
 					formContainer.appendChild(filterInput);
-					filterInput.style.width = "100%";
 					formContainer.appendChild(fileSelect);
-					fileSelect.style.width = "100%";
-					fileSelect.style.flexGrow = "1";
 				} else if (i === 1 && j === 0) {
 					formContainer.appendChild(ntMsg);
 					formContainer.appendChild(ntCodeEditor);
-					ntCodeEditor.style.width = "100%";
-					ntCodeEditor.style.minHeight = "200px";
-					ntCodeEditor.style.flexGrow = "1";
-					ntCodeEditor.style.fontFamily = codeFont;
-					ntCodeEditor.style.fontSize = '9pt';
 				} else if (i === 1 && j === 1) {
 					formContainer.appendChild(ntPreviewToggle);
 					formContainer.appendChild(ntPreview);
-					ntPreview.style.width = "100%";
-					ntPreview.style.minHeight = "200px";
 				}
 
 				cell.appendChild(formContainer);

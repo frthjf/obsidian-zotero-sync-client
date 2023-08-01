@@ -1,7 +1,7 @@
 {
 	"id": "zotero-sync-client",
 	"name": "Zotero Sync",
-	"version": "1.0.4",
+	"version": "1.0.5",
 	"minAppVersion": "0.15.0",
 	"description": "Zotero API client to sync your Zotero library into your vault",
 	"author": "Frithjof Gressmann",

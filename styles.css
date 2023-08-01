@@ -1,8 +1,59 @@
-/*
+.zotero-sync-settings .library-select {
+    display: flex;
+    flex-direction: row;
+}
 
-This CSS file will be included with your plugin, and
-available in the app when your plugin is enabled.
+.zotero-sync-settings .fp-msg {
+    padding: 5px;
+    font-size: 10pt;
+}
 
-If your plugin does not need CSS, delete this file.
+.zotero-sync-settings .nt-msg {
+    padding: 5px;
+    font-size: 10pt;
+}
 
-*/
+.zotero-sync-settings .nt-preview {
+    font-size: 9pt;
+    overflow: auto;
+    padding: 3px;
+    width: 100%;
+    min-height: 200px;
+}
+
+.zotero-sync-settings .form-grid {
+    width: 100%;
+    height: 100%;
+    margin-top: 10px;
+    table-layout: fixed;
+}
+
+.zotero-sync-settings .form-grid td {
+    vertical-align: top;
+}
+
+.zotero-sync-settings .form-grid .form-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.zotero-sync-settings .filepath-code-editor, .zotero-sync-settings .note-code-editor {
+    width: 100%;
+    min-height: 200px;
+    flex-grow: 1;
+    font-family: Menlo, SFMono-Regular, Consolas, "Roboto Mono", "Source Code Pro", monospace;
+    font-size: 9pt;
+}
+
+.zotero-sync-settings .nt-preview-toggle {
+    width: 100%;
+}
+
+.zotero-sync-settings .file-select {
+    flex-grow: 1;
+}
+
+.zotero-sync-settings .filter-input {
+    width: 100%;
+}

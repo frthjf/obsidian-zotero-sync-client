@@ -187,7 +187,7 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 				this.app.vault.adapter.getBasePath(),
 				this.app.vault.configDir,
 				"plugins",
-				"obsidian-zotero-sync-client",
+				"zotero-sync-client",
 				...append
 			)
 		}

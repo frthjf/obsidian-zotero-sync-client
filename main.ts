@@ -27,6 +27,7 @@ const md5 = (string: string) : string => {
 type ZoteroCollectionItem = Zotero.Collection["data"] & {
 	itemType: "collection";
 	children: ZoteroCollectionItem[];
+	marker: string;
 };
 
 interface ZoteroNoteItem extends Zotero.Item.Note {
@@ -37,6 +38,7 @@ type ZoteroItem = Zotero.Item.Any & ZoteroNoteItem & {
 	children: ZoteroItem[];
 	parentItem: string;
 	super_collections: string[];
+	marker: string;
 };
 
 type ZoteroNoteStatus = {
@@ -297,7 +299,11 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 				}
 				return;
 			}
-			const note = this.getMarker(element) + this.generateNote(element) 
+			element.marker = this.getMarker(element)
+			let note = this.generateNote(element)
+			if (!note.includes(element.marker)) {
+				note = element.marker + '\n\n' + note
+			}
 			const hash = md5(note)
 			
 			// check if note exists
@@ -447,7 +453,7 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 		// Unique marker to identify note `<!-- zotero_key: ${key} -->`
 		// This is prepended automatically and cannot be edited by the user
 		const kind = element.itemType.toLowerCase() == "collection" ? "collections" : "items"
-		return `[🇿](zotero://select/library/${kind}/${element.key})\n\n`
+		return `[🇿](zotero://select/library/${kind}/${element.key})`
 	}
 	
 	async readLibrary(library: string): Promise<{
@@ -822,16 +828,17 @@ class ClientSettingTab extends PluginSettingTab {
 
 			// update preview
 			const element = data.items.get(fileSelect.value) || {} as ZoteroItem;
+			element.marker = this.plugin.getMarker(element);
 			const previewType = ntPreviewToggle.value;
 			if (previewType === 'md') {
 				try {
 					ntPreview.innerText = this.plugin.generateNote(element, ntCodeEditor.value);
-					ntCodeEditor.style.borderColor = '';
+					ntCodeEditor.classList.remove('zotero-sync-settings-error');
 				} catch (e) {
 					// display full error in preview
 					ntPreview.innerText = e;
-					ntCodeEditor.style.borderColor = 'red';
-					return;
+					ntCodeEditor.classList.add('zotero-sync-settings-error')
+					return;	
 				}
 			} else if (previewType === 'md_prev') {
 				// todo: add markdown preview

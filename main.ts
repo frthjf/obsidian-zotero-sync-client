@@ -109,7 +109,7 @@ return 'References/' + fp;
 
 export default class ZoteroSyncClientPlugin extends Plugin {
 	settings: ZoteroSyncClientSettings;
-	store: Store;
+	store_directory: string | undefined;
 	client: ZoteroAPI;
 	last_sync: Date;
 	interval: number;
@@ -132,13 +132,9 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 		this.addSettingTab(new ClientSettingTab(this.app, this));
 		
 		// initialize the store which acts as a cache
-		this.store = new Store
-		const storeDirectory = this.getPluginPath("store")
-		if (storeDirectory && !fs.existsSync(storeDirectory)) {
-			fs.mkdirSync(storeDirectory);
-		}
-		if (storeDirectory) {
-			await this.store.load(storeDirectory)
+		this.store_directory = this.getPluginPath("store")
+		if (this.store_directory && !fs.existsSync(this.store_directory)) {
+			fs.mkdirSync(this.store_directory);
 		}
 
 		// initialize the API client
@@ -253,7 +249,13 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 
 	async syncWithZotero() {
 		// retrieve latest updates from API and write to store
-		await this.client.sync(this.store)
+		await this.authenticate()
+
+		const store = new Store;
+		if (this.store_directory) {
+			await store.load(this.store_directory)
+		}
+		await this.client.sync(store)
 	}
 
 	async applyAllUpdates() {

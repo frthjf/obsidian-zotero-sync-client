@@ -788,11 +788,11 @@ class ClientSettingTab extends PluginSettingTab {
 							value: item.key
 						});
 					}
-					fpCodeEditor.style.borderColor = '';
+					fpCodeEditor.classList.remove('zotero-sync-settings-error');
 				} catch (e) {
 					// display full error in preview
 					ntPreview.innerText = e;
-					fpCodeEditor.style.borderColor = 'red';
+					fpCodeEditor.classList.add('zotero-sync-settings-error')
 					return;
 				}
 			}

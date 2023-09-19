@@ -46,6 +46,10 @@
     font-size: 9pt;
 }
 
+.zotero-sync-settings-error {
+    border-color: red !important;
+}
+
 .zotero-sync-settings .nt-preview-toggle {
     width: 100%;
 }

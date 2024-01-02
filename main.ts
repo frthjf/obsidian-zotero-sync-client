@@ -37,7 +37,7 @@ interface ZoteroNoteItem extends Zotero.Item.Note {
 type ZoteroItem = Zotero.Item.Any & ZoteroNoteItem & {
 	children: ZoteroItem[];
 	parentItem: string;
-	super_collections: string[];
+	super_collections: ZoteroCollectionItem[];
 	marker: string;
 };
 
@@ -126,7 +126,7 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 					<path d="M1470 12796 c0 -2 -113 -492 -251 -1088 -137 -595 -299 -1296 -360 -1557 -60 -261 -109 -480 -109 -487 0 -12 411 -14 2573 -16 l2572 -3 -2947 -4688 -2948 -4688 0 -135 0 -134 5365 0 c2951 0 5365 2 5365 5 0 2 68 267 151 587 83 321 251 974 375 1452 l224 868 0 119 0 119 -2939 2 -2938 3 2938 4688 2939 4688 0 135 0 134 -5005 0 c-2753 0 -5005 -2 -5005 -4z"/>
 				</g>
 			</svg>`
-	   	);
+			);
 
 		await this.loadSettings();
 		this.addSettingTab(new ClientSettingTab(this.app, this));
@@ -507,12 +507,15 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 					parent.children.push(collection)
 				}
 			}
-			const findSuperCollections = (collectionKey: string) : string[] => {
-				let collection = map.collections.get(collectionKey)
+
+			const findSuperCollections = (
+				collectionKey: string
+			): ZoteroCollectionItem[] => {
+				const collection = map.collections.get(collectionKey);
 				if (!collection) {
 					return []
 				}
-				const collections : string[] = [collection.key]
+				const collections: ZoteroCollectionItem[] = [collection];
 				if (collection.parentCollection) {
 					collections.push(...findSuperCollections(collection.parentCollection))
 				}

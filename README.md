@@ -34,5 +34,48 @@ By default, the markdown files are generated using a standard template which can
 
 https://github.com/frthjf/obsidian-zotero-sync-client/assets/5411942/81a58562-af7a-4d74-a1c8-459dc78e116f
 
+**Example template**
+```[javascript]
+let n = '';
+
+// properties
+n += '---\n';
+n += 'Tags:\n';
+n += data.tags.map(t => {
+    // Remove spaces around hyphens and replace other spaces with underscores
+    let formattedTag = t.tag.replace(/\s*-\s*/g, '-').replace(/\s+/g, '_');
+    return '- "' + formattedTag + '"';
+}).join('\n');
+
+n += '\n';
+n += 'Collections:\n'
+if (data.super_collections) {
+  n += data.super_collections.map(item => '- ' + item.name).join('\n');
+}
+n += '\n';
+n += 'Authors: \n';
+if (data.creators) {
+	data.creators.forEach(author => {
+	n += '- "[[People/' + author.firstName + ' ' + author.lastName + ']]"\n'; 
+	});
+}
+"\"\n";
+n += '---\n';
+n += data.marker;
+n += '\n\n';
+n += '## Abstract: ' + '\n' + data.abstractNote + '\n\n';
+n += '\n\n';
+if (data.children) {
+	const notes = data.children.filter(
+		c => c.itemType.toLowerCase() == 'note'
+	)
+	notes.forEach(c => {
+		n += c.note_markdown + '\n\n';
+	});
+}
+return n;
+```
 Note: This plugin uses the excellent [retorquere/zotero-sync](https://github.com/retorquere/zotero-sync) package for the Zotero API integration.
+
+
 

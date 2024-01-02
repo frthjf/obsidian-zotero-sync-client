@@ -34,15 +34,18 @@ By default, the markdown files are generated using a standard template which can
 
 https://github.com/frthjf/obsidian-zotero-sync-client/assets/5411942/81a58562-af7a-4d74-a1c8-459dc78e116f
 
+During template generation, you can access the item `data` as well as the global `$collections` and `$items` mapping which contains all collections and items.
+
 **Example template**
-```[javascript]
+
+```js
 let n = '';
 
-// properties
+// generate properties
 n += '---\n';
 n += 'Tags:\n';
 n += data.tags.map(t => {
-    // Remove spaces around hyphens and replace other spaces with underscores
+    // remove spaces around hyphens and replace other spaces with underscores
     let formattedTag = t.tag.replace(/\s*-\s*/g, '-').replace(/\s+/g, '_');
     return '- "' + formattedTag + '"';
 }).join('\n');
@@ -50,7 +53,8 @@ n += data.tags.map(t => {
 n += '\n';
 n += 'Collections:\n'
 if (data.super_collections) {
-  n += data.super_collections.map(item => '- ' + item.name).join('\n');
+  console.log(data.super_collections)
+  n += data.super_collections.map(k => '- ' + $collections.get(k).name).join('\n');
 }
 n += '\n';
 n += 'Authors: \n';
@@ -61,9 +65,11 @@ if (data.creators) {
 }
 "\"\n";
 n += '---\n';
+
+// generate content
 n += data.marker;
 n += '\n\n';
-n += '## Abstract: ' + '\n' + data.abstractNote + '\n\n';
+n += '## Abstract ' + '\n' + data.abstractNote + '\n\n';
 n += '\n\n';
 if (data.children) {
 	const notes = data.children.filter(
@@ -75,7 +81,8 @@ if (data.children) {
 }
 return n;
 ```
-Note: This plugin uses the excellent [retorquere/zotero-sync](https://github.com/retorquere/zotero-sync) package for the Zotero API integration.
 
+## Acknowledgements
 
+This plugin uses the excellent [retorquere/zotero-sync](https://github.com/retorquere/zotero-sync) package for the Zotero API integration.
 

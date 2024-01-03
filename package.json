@@ -23,5 +23,8 @@
 	},
 	"dependencies": {
 		"@retorquere/zotero-sync": "^1.0.27"
+	},
+	"overrides": {
+		"node-fetch": "^2"
 	}
 }

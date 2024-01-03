@@ -454,7 +454,7 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 	getMarker(element: ZoteroCollectionItem | ZoteroItem) {
 		// Unique marker to identify note `<!-- zotero_key: ${key} -->`
 		// This is prepended automatically and cannot be edited by the user
-		const kind = element.itemType.toLowerCase() == "collection" ? "collections" : "items"
+		const kind = element.itemType?.toLowerCase() == "collection" ? "collections" : "items"
 		return `[🇿](zotero://select/library/${kind}/${element.key})`
 	}
 	
@@ -792,6 +792,23 @@ class ClientSettingTab extends PluginSettingTab {
 
 			// parse file names
 			let fileNames = [];
+			for (const item of data.collections.values()) {
+				try {
+					const fp = this.plugin.generateNoteFilePath(item, data.collections, data.items, library, fpCodeEditor.value);
+					if (fp) {
+						fileNames.push({
+							name: fp,
+							value: item.key
+						});
+					}
+					fpCodeEditor.classList.remove('zotero-sync-settings-error');
+				} catch (e) {
+					// display full error in preview
+					ntPreview.innerText = e;
+					fpCodeEditor.classList.add('zotero-sync-settings-error')
+					return;
+				}
+			}
 			for (const item of data.items.values()) {
 				try {
 					const fp = this.plugin.generateNoteFilePath(item, data.collections, data.items, library, fpCodeEditor.value);

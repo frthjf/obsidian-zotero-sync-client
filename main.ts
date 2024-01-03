@@ -126,7 +126,7 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 					<path d="M1470 12796 c0 -2 -113 -492 -251 -1088 -137 -595 -299 -1296 -360 -1557 -60 -261 -109 -480 -109 -487 0 -12 411 -14 2573 -16 l2572 -3 -2947 -4688 -2948 -4688 0 -135 0 -134 5365 0 c2951 0 5365 2 5365 5 0 2 68 267 151 587 83 321 251 974 375 1452 l224 868 0 119 0 119 -2939 2 -2938 3 2938 4688 2939 4688 0 135 0 134 -5005 0 c-2753 0 -5005 -2 -5005 -4z"/>
 				</g>
 			</svg>`
-	   	);
+		);
 
 		await this.loadSettings();
 		this.addSettingTab(new ClientSettingTab(this.app, this));
@@ -289,7 +289,7 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 		// compute renames, updates, deletes, creates
 		const computeChanges = (element: ZoteroCollectionItem | ZoteroItem, status: Map<string, ZoteroNoteStatus>, updatedStatus: Map<string, ZoteroNoteStatus>) => {
 			const key = element.key
-			const filePath = this.generateNoteFilePath(element)
+			const filePath = this.generateNoteFilePath(element, data.collections, data.items)
 			if (!filePath) {
 				// delete
 				const i = status.get(key)
@@ -302,7 +302,7 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 				return;
 			}
 			element.marker = this.getMarker(element)
-			let note = this.generateNote(element)
+			let note = this.generateNote(element, data.collections, data.items)
 			if (!note.includes(element.marker)) {
 				note = element.marker + '\n\n' + note
 			}
@@ -427,12 +427,12 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 		await this.app.vault.delete(fn)
 	}
 
-	generateNoteFilePath(data: ZoteroItem | ZoteroCollectionItem, template: string | null = null) : string {
+	generateNoteFilePath(data: ZoteroItem | ZoteroCollectionItem, collections: Map<string, ZoteroCollectionItem>, items: Map<string, ZoteroItem>, template: string | null = null) : string {
 		if (!template) {
 			template = this.settings.filepath_generator
 		}
-		const parse = new Function('data', template)
-		const result = parse(data)
+		const parse = new Function('data', '$collections', '$items', template)
+		const result = parse(data, collections, items)
 		if (result) {
 			if (result.endsWith('.md')) {
 				return normalizePath(result)
@@ -443,12 +443,12 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 		}
 	}
 
-	generateNote(data: ZoteroItem | ZoteroCollectionItem, template: string | null = null) : string {
+	generateNote(data: ZoteroItem | ZoteroCollectionItem, collections: Map<string, ZoteroCollectionItem>, items: Map<string, ZoteroItem>, template: string | null = null) : string {
 		if (!template) {
 			template = this.settings.note_generator
 		}
-		const parse = new Function('data', template)
-		return parse(data)
+		const parse = new Function('data', '$collections', '$items', template)
+		return parse(data, collections, items)
 	}
 
 	getMarker(element: ZoteroCollectionItem | ZoteroItem) {
@@ -507,12 +507,13 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 					parent.children.push(collection)
 				}
 			}
-			const findSuperCollections = (collectionKey: string) : string[] => {
-				let collection = map.collections.get(collectionKey)
+
+			const findSuperCollections = (collectionKey: string): string[] => {
+				const collection = map.collections.get(collectionKey);
 				if (!collection) {
 					return []
 				}
-				const collections : string[] = [collection.key]
+				const collections: string[] = [collection.key];
 				if (collection.parentCollection) {
 					collections.push(...findSuperCollections(collection.parentCollection))
 				}
@@ -789,7 +790,7 @@ class ClientSettingTab extends PluginSettingTab {
 			let fileNames = [];
 			for (const item of data.items.values()) {
 				try {
-					const fp = this.plugin.generateNoteFilePath(item, fpCodeEditor.value);
+					const fp = this.plugin.generateNoteFilePath(item, data.collections, data.items, fpCodeEditor.value);
 					if (fp) {
 						fileNames.push({
 							name: fp,
@@ -834,7 +835,7 @@ class ClientSettingTab extends PluginSettingTab {
 			const previewType = ntPreviewToggle.value;
 			if (previewType === 'md') {
 				try {
-					ntPreview.innerText = this.plugin.generateNote(element, ntCodeEditor.value);
+					ntPreview.innerText = this.plugin.generateNote(element, data.collections, data.items, ntCodeEditor.value);
 					ntCodeEditor.classList.remove('zotero-sync-settings-error');
 				} catch (e) {
 					// display full error in preview

@@ -289,7 +289,7 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 		// compute renames, updates, deletes, creates
 		const computeChanges = (element: ZoteroCollectionItem | ZoteroItem, status: Map<string, ZoteroNoteStatus>, updatedStatus: Map<string, ZoteroNoteStatus>) => {
 			const key = element.key
-			const filePath = this.generateNoteFilePath(element, data.collections, data.items)
+			const filePath = this.generateNoteFilePath(element, data.collections, data.items, library)
 			if (!filePath) {
 				// delete
 				const i = status.get(key)
@@ -302,7 +302,7 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 				return;
 			}
 			element.marker = this.getMarker(element)
-			let note = this.generateNote(element, data.collections, data.items)
+			let note = this.generateNote(element, data.collections, data.items, library)
 			if (!note.includes(element.marker)) {
 				note = element.marker + '\n\n' + note
 			}
@@ -427,12 +427,12 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 		await this.app.vault.delete(fn)
 	}
 
-	generateNoteFilePath(data: ZoteroItem | ZoteroCollectionItem, collections: Map<string, ZoteroCollectionItem>, items: Map<string, ZoteroItem>, template: string | null = null) : string {
+	generateNoteFilePath(data: ZoteroItem | ZoteroCollectionItem, collections: Map<string, ZoteroCollectionItem>, items: Map<string, ZoteroItem>, library: ZoteroRemoteLibrary, template: string | null = null) : string {
 		if (!template) {
 			template = this.settings.filepath_generator
 		}
-		const parse = new Function('data', '$collections', '$items', template)
-		const result = parse(data, collections, items)
+		const parse = new Function('data', '$collections', '$items', '$library', template)
+		const result = parse(data, collections, items, library)
 		if (result) {
 			if (result.endsWith('.md')) {
 				return normalizePath(result)
@@ -443,12 +443,12 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 		}
 	}
 
-	generateNote(data: ZoteroItem | ZoteroCollectionItem, collections: Map<string, ZoteroCollectionItem>, items: Map<string, ZoteroItem>, template: string | null = null) : string {
+	generateNote(data: ZoteroItem | ZoteroCollectionItem, collections: Map<string, ZoteroCollectionItem>, items: Map<string, ZoteroItem>, library: ZoteroRemoteLibrary, template: string | null = null) : string {
 		if (!template) {
 			template = this.settings.note_generator
 		}
-		const parse = new Function('data', '$collections', '$items', template)
-		return parse(data, collections, items)
+		const parse = new Function('data', '$collections', '$items', '$library', template)
+		return parse(data, collections, items, library)
 	}
 
 	getMarker(element: ZoteroCollectionItem | ZoteroItem) {
@@ -718,10 +718,14 @@ class ClientSettingTab extends PluginSettingTab {
 		const librarySelect = document.createElement('select');
 		librarySelect.classList.add('library-select');
 		let libraryCount = 0;
+		
 		for (const library of Object.values(this.plugin.client.libraries)) {
 			const option = document.createElement('option');
 			option.value = library.prefix;
-			option.text = library.prefix;
+			option.text = '-- User library --';
+			if (library.type === 'group') {
+				option.text = library.name;
+			}
 			librarySelect.appendChild(option);
 			libraryCount++;
 		}
@@ -783,14 +787,14 @@ class ClientSettingTab extends PluginSettingTab {
 
 		// Refresh preview logic
 		const refreshPreview = async () => {
-			const library = librarySelect.value;
-			const data = await this.plugin.readLibrary(library);
+			const library = this.plugin.client.libraries[librarySelect.value];
+			const data = await this.plugin.readLibrary(library.prefix);
 
 			// parse file names
 			let fileNames = [];
 			for (const item of data.items.values()) {
 				try {
-					const fp = this.plugin.generateNoteFilePath(item, data.collections, data.items, fpCodeEditor.value);
+					const fp = this.plugin.generateNoteFilePath(item, data.collections, data.items, library, fpCodeEditor.value);
 					if (fp) {
 						fileNames.push({
 							name: fp,
@@ -835,7 +839,7 @@ class ClientSettingTab extends PluginSettingTab {
 			const previewType = ntPreviewToggle.value;
 			if (previewType === 'md') {
 				try {
-					ntPreview.innerText = this.plugin.generateNote(element, data.collections, data.items, ntCodeEditor.value);
+					ntPreview.innerText = this.plugin.generateNote(element, data.collections, data.items, library, ntCodeEditor.value);
 					ntCodeEditor.classList.remove('zotero-sync-settings-error');
 				} catch (e) {
 					// display full error in preview

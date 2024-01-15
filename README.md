@@ -34,7 +34,7 @@ By default, the markdown files are generated using a standard template which can
 
 https://github.com/frthjf/obsidian-zotero-sync-client/assets/5411942/81a58562-af7a-4d74-a1c8-459dc78e116f
 
-During template generation, you can access the item `data` as well as the global `$collections` and `$items` mapping which contains all collections and items.
+During template generation, you can access the item `data` as well as the global `$collections` and `$items` mapping which contains all collections and items. Furthermore, the library information is available in the `$library` variable.
 
 **Example template**
 
@@ -56,6 +56,8 @@ if (data.super_collections) {
   console.log(data.super_collections)
   n += data.super_collections.map(k => '- ' + $collections.get(k).name).join('\n');
 }
+n += '\n';
+n += 'Library: ' + $library.name;
 n += '\n';
 n += 'Authors: \n';
 if (data.creators) {

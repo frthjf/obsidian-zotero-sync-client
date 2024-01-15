@@ -301,7 +301,7 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 				}
 				return;
 			}
-			element.marker = this.getMarker(element)
+			element.marker = this.getMarker(element, library)
 			let note = this.generateNote(element, data.collections, data.items, library)
 			if (!note.includes(element.marker)) {
 				note = element.marker + '\n\n' + note
@@ -451,11 +451,15 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 		return parse(data, collections, items, library)
 	}
 
-	getMarker(element: ZoteroCollectionItem | ZoteroItem) {
+	getMarker(element: ZoteroCollectionItem | ZoteroItem, library: ZoteroRemoteLibrary) {
 		// Unique marker to identify note `<!-- zotero_key: ${key} -->`
 		// This is prepended automatically and cannot be edited by the user
 		const kind = element.itemType?.toLowerCase() == "collection" ? "collections" : "items"
-		return `[🇿](zotero://select/library/${kind}/${element.key})`
+		let domain = '/library'
+		if (library.type === 'group') {
+			domain = library.prefix;
+		}
+		return `[🇿](zotero://select${domain}/${kind}/${element.key})`
 	}
 	
 	async readLibrary(library: string): Promise<{
@@ -852,11 +856,15 @@ class ClientSettingTab extends PluginSettingTab {
 
 			// update preview
 			const element = data.items.get(fileSelect.value) || {} as ZoteroItem;
-			element.marker = this.plugin.getMarker(element);
+			element.marker = this.plugin.getMarker(element, library);
 			const previewType = ntPreviewToggle.value;
 			if (previewType === 'md') {
 				try {
-					ntPreview.innerText = this.plugin.generateNote(element, data.collections, data.items, library, ntCodeEditor.value);
+					let note =  this.plugin.generateNote(element, data.collections, data.items, library, ntCodeEditor.value);
+					if (!note.includes(element.marker)) {
+						note = element.marker + '\n\n' + note;
+					}
+					ntPreview.innerText = note;
 					ntCodeEditor.classList.remove('zotero-sync-settings-error');
 				} catch (e) {
 					// display full error in preview

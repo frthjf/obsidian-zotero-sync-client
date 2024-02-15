@@ -525,12 +525,13 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 			}
 
 			// rewrite any item with parentItem key to be nested in its parent
+			const removedChildren = new Map<string, ZoteroItem>();
 			for (const [key, item] of map.items) {
 				if (!item.children) {
 					item.children = []
 				}
 				if (item.parentItem) {
-					const parent = map.items.get(item.parentItem)
+					const parent = map.items.get(item.parentItem) ?? removedChildren.get(item.parentItem)
 					if (!parent) {
 						continue
 					}
@@ -538,6 +539,7 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 						parent.children = []
 					}
 					parent.children.push(item)
+					removedChildren.set(item.key, item)
 					map.items.delete(key)
 				}
 				if (item.collections) {

@@ -493,7 +493,7 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 				collections: new Map(data.collections.map((c: ZoteroCollectionItem) => [c.key, c])),
 				items: new Map(data.items.map((i: ZoteroItem) => {
 					if (i.itemType.toLowerCase() === 'note' && i.note) {
-						const modified_note = this.addSrcAttributeToImageTagsIfMissing(i.note, this.client.userID.toString(), this.settings.api_key);
+						const modified_note = this.transformImgTags(i.note, this.client.userID.toString(), this.settings.api_key);
 						i.note_markdown = htmlToMarkdown(modified_note);
 					}
 					return [i.key, i]
@@ -619,33 +619,19 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 		new Notice(`Zotero Sync: Cleared cache`)
 	}
 
-	addSrcAttributeToImageTagsIfMissing(html: string, userID?: string, apiKey?: string): string {
-		if (!userID || !apiKey) return html;
-		// Regular expression to match img tags with a data-attachment-key attribute
-		const imgRe = /<img([^>]*\sdata-attachment-key=(['"])([^'"]+)\2[^>]*)>/gi;
-		/*
-		- `<img`: Matches the starting part of an `<img>` tag.
-		- `([^>]*`: Matches any characters that are not a closing bracket (`>`), allowing for other attributes before `data-attachment-key`.
-		- `\sdata-attachment-key=`: Matches the exact string ` data-attachment-key=` with a preceding whitespace.
-		- `(['"])`: Captures the quote character (either single or double) used for the attribute value.
-		- `([^'"]+)`: Captures the value of the `data-attachment-key` attribute, which can be any characters except for the matching quote character.
-		- `\2`: Refers back to the captured quote character to ensure the string is properly closed.
-		- `[^>]*)`: Matches any additional characters that are not a closing bracket, allowing for more attributes in the `<img>` tag.
-		- `>`: Matches the closing bracket of the `<img>` tag.
-		- `gi`: The `g` flag indicates a global search (find all matches), and the `i` flag makes the search case-insensitive. 
-		*/
-		return html.replace(imgRe, (match, attrs, quote, attKey) => {
-			// Construct the file URL using the user ID and attachment key
-			const fileUrl = `https://api.zotero.org/users/${userID}/items/${attKey}/file?key=${apiKey}`;
-			// If there’s already a src, we replace it; otherwise we append it at the end
-			if (/src=/i.test(attrs)) {
-				// Replace the existing src attribute with the new file URL
-				return match.replace(/src=(['"])[^'"]*\1/, `src="${fileUrl}"`);
-			} else {
-				// Add the new src attribute to the img tag
-				return `<img${attrs} src="${fileUrl}">`;
+	transformImgTags(html: string, userID: string, apiKey: string): string {
+		const parser = new DOMParser();
+		const doc = parser.parseFromString(html, "text/html");
+		const imgElements = doc.querySelectorAll("img[data-attachment-key]");
+		imgElements.forEach((img) => {
+			const attKey = img.getAttribute("data-attachment-key");
+			if (attKey) {
+				const fileUrl = `https://api.zotero.org/users/${userID}/items/${attKey}/file?key=${apiKey}`;
+				img.setAttribute("src", fileUrl);
 			}
 		});
+
+		return doc.body.innerHTML;
 	}
 
 }

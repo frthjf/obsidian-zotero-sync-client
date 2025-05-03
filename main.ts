@@ -55,7 +55,6 @@ type ZoteroRemoteLibrary = {
 
 interface ZoteroSyncClientSettings {
 	api_key: string;
-	user_id: string;
 	sync_on_startup: boolean;
 	sync_on_interval: boolean;
 	sync_interval: number;
@@ -65,7 +64,6 @@ interface ZoteroSyncClientSettings {
 
 const DEFAULT_SETTINGS: ZoteroSyncClientSettings = {
 	api_key: '',
-	user_id: '',
 	sync_on_startup: true,
 	sync_on_interval: false,
 	sync_interval: 0,
@@ -495,7 +493,7 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 				collections: new Map(data.collections.map((c: ZoteroCollectionItem) => [c.key, c])),
 				items: new Map(data.items.map((i: ZoteroItem) => {
 					if (i.itemType.toLowerCase() === 'note' && i.note) {
-						const modified_note = this.addSrcAttributeToImageTagsIfMissing(i.note, this.settings.user_id, this.settings.api_key);
+						const modified_note = this.addSrcAttributeToImageTagsIfMissing(i.note, this.client.userID.toString(), this.settings.api_key);
 						i.note_markdown = htmlToMarkdown(modified_note);
 					}
 					return [i.key, i]

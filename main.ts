@@ -1,17 +1,17 @@
-import { 
-	App, 
-	Plugin, 
-	PluginSettingTab, 
-	Setting, 
-	TFile, 
-	FileSystemAdapter, 
-	htmlToMarkdown, 
-	normalizePath, 
-	Notice, 
-	debounce, 
-	addIcon, 
-	prepareFuzzySearch, 
-	TAbstractFile 
+import {
+	App,
+	Plugin,
+	PluginSettingTab,
+	Setting,
+	TFile,
+	FileSystemAdapter,
+	htmlToMarkdown,
+	normalizePath,
+	Notice,
+	debounce,
+	addIcon,
+	prepareFuzzySearch,
+	TAbstractFile
 } from 'obsidian';
 import { Sync as ZoteroAPI } from '@retorquere/zotero-sync/index'
 import { Store } from '@retorquere/zotero-sync/json-store'
@@ -20,7 +20,7 @@ import path from 'path';
 import fs from "fs";
 import crypto from "crypto";
 
-const md5 = (string: string) : string => {
+const md5 = (string: string): string => {
 	return crypto.createHash('md5').update(string).digest('hex');
 }
 
@@ -47,10 +47,10 @@ type ZoteroNoteStatus = {
 }
 
 type ZoteroRemoteLibrary = {
-    type: 'group' | 'user';
-    prefix: string;
-    name: string;
-    version?: number;
+	type: 'group' | 'user';
+	prefix: string;
+	name: string;
+	version?: number;
 }
 
 interface ZoteroSyncClientSettings {
@@ -120,7 +120,7 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 	}
 
 	async onload() {
-		addIcon("zotero", 
+		addIcon("zotero",
 			`<svg version="1.0" xmlns="http://www.w3.org/2000/svg"  viewBox="0 0 948.000000 1580.000000" preserveAspectRatio="xMidYMid meet">
 				<g transform="translate(0.00000,1280.000000) scale(0.075,-0.075)" fill="#888888" stroke="none">
 					<path d="M1470 12796 c0 -2 -113 -492 -251 -1088 -137 -595 -299 -1296 -360 -1557 -60 -261 -109 -480 -109 -487 0 -12 411 -14 2573 -16 l2572 -3 -2947 -4688 -2948 -4688 0 -135 0 -134 5365 0 c2951 0 5365 2 5365 5 0 2 68 267 151 587 83 321 251 974 375 1452 l224 868 0 119 0 119 -2939 2 -2938 3 2938 4688 2939 4688 0 135 0 134 -5005 0 c-2753 0 -5005 -2 -5005 -4z"/>
@@ -130,7 +130,7 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 
 		await this.loadSettings();
 		this.addSettingTab(new ClientSettingTab(this.app, this));
-		
+
 		// initialize the store which acts as a cache
 		this.store_directory = this.getPluginPath("store")
 		if (this.store_directory && !fs.existsSync(this.store_directory)) {
@@ -139,7 +139,7 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 
 		// initialize the API client
 		this.client = new ZoteroAPI
-		this.client.on(ZoteroAPI.event.error, function() { console.log("ERROR!", [...arguments]) })
+		this.client.on(ZoteroAPI.event.error, function () { console.log("ERROR!", [...arguments]) })
 		// for (const event of [ ZoteroAPI.event.library, ZoteroAPI.event.collection, ZoteroAPI.event.item ]) {
 		// 	this.client.on(event, (e => function() { console.log(e, [...arguments]) })(event))
 		// }
@@ -182,7 +182,7 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 
 	getPluginPath(...append: string[]) {
 		if (this.app.vault.adapter instanceof FileSystemAdapter) {
-			 return path.join(
+			return path.join(
 				this.app.vault.adapter.getBasePath(),
 				this.app.vault.configDir,
 				"plugins",
@@ -238,8 +238,8 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 		}
 
 		if (true) { // note: you may want to disable the sync during
-					//       development to avoid hitting API limits
-			await this.syncWithZotero() 
+			//       development to avoid hitting API limits
+			await this.syncWithZotero()
 		}
 
 		await this.applyAllUpdates()
@@ -268,16 +268,22 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 		const data = await this.readLibrary(library.prefix)
 		const status = await this.readStatus(library.prefix)
 		// compute changes
-		const renames: {[key: string]: {
-			from: string, to: string, note: string
-		}} = {};
-		const updates: {[key: string]: {
-			filePath: string, note: string
-		}} = {};
-		const deletes: {[key: string]: string} = {};
-		const creates: {[key: string]: {
-			filePath: string, note: string
-		}} = {};
+		const renames: {
+			[key: string]: {
+				from: string, to: string, note: string
+			}
+		} = {};
+		const updates: {
+			[key: string]: {
+				filePath: string, note: string
+			}
+		} = {};
+		const deletes: { [key: string]: string } = {};
+		const creates: {
+			[key: string]: {
+				filePath: string, note: string
+			}
+		} = {};
 		const updatedStatus: {
 			items: Map<string, ZoteroNoteStatus>;
 			collections: Map<string, ZoteroNoteStatus>;
@@ -307,25 +313,25 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 				note = element.marker + '\n\n' + note
 			}
 			const hash = md5(note)
-			
+
 			// check if note exists
 			if (status.get(key)) {
 				// does it need to be renamed?
 				if (status.get(key)?.filePath != filePath) {
 					// rename
-					renames[key] = {from: status.get(key)?.filePath || '', to: filePath, note: note}
+					renames[key] = { from: status.get(key)?.filePath || '', to: filePath, note: note }
 				}
 				// does it need to be updated?
 				if (status.get(key)?.hash !== hash) {
 					// update
-					updates[key] = {filePath: filePath, note: note}
+					updates[key] = { filePath: filePath, note: note }
 				}
 
 				// done
 				status.delete(key)
 			} else {
 				// create
-				creates[key] = {filePath: filePath, note: note}
+				creates[key] = { filePath: filePath, note: note }
 			}
 
 			// add to updated status
@@ -371,12 +377,12 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 				console.log("Failed to create file: " + value.filePath + " (" + e.message + ")");
 			}
 		}
-		
+
 		// write status to store
 		await this.writeStatus(library.prefix, updatedStatus)
 	}
 
-	aquireFile(filePath: string) : TAbstractFile | null {
+	aquireFile(filePath: string): TAbstractFile | null {
 		// TODO: enable optional safety check if file has been generated by this plugin
 		//       (e.g. by checking for the marker)
 		return this.app.vault.getAbstractFileByPath(filePath)
@@ -397,7 +403,7 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 		} else {
 			await this.app.fileManager.renameFile(fn, newPath);
 		}
-		
+
 	}
 
 	async updateFile(filePath: string, note: string) {
@@ -427,7 +433,7 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 		await this.app.vault.delete(fn)
 	}
 
-	generateNoteFilePath(data: ZoteroItem | ZoteroCollectionItem, collections: Map<string, ZoteroCollectionItem>, items: Map<string, ZoteroItem>, library: ZoteroRemoteLibrary, template: string | null = null) : string {
+	generateNoteFilePath(data: ZoteroItem | ZoteroCollectionItem, collections: Map<string, ZoteroCollectionItem>, items: Map<string, ZoteroItem>, library: ZoteroRemoteLibrary, template: string | null = null): string {
 		if (!template) {
 			template = this.settings.filepath_generator
 		}
@@ -443,7 +449,7 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 		}
 	}
 
-	generateNote(data: ZoteroItem | ZoteroCollectionItem, collections: Map<string, ZoteroCollectionItem>, items: Map<string, ZoteroItem>, library: ZoteroRemoteLibrary, template: string | null = null) : string {
+	generateNote(data: ZoteroItem | ZoteroCollectionItem, collections: Map<string, ZoteroCollectionItem>, items: Map<string, ZoteroItem>, library: ZoteroRemoteLibrary, template: string | null = null): string {
 		if (!template) {
 			template = this.settings.note_generator
 		}
@@ -461,7 +467,7 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 		}
 		return `[🇿](zotero://select${domain}/${kind}/${element.key})`
 	}
-	
+
 	async readLibrary(library: string): Promise<{
 		collections: Map<string, ZoteroCollectionItem>;
 		items: Map<string, ZoteroItem>;
@@ -475,7 +481,7 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 			const dataFile = this.getPluginPath("store", `${encodeURIComponent(library)}.json`)
 			if (dataFile) {
 				try {
-			 		data = JSON.parse(await fs.promises.readFile(dataFile, 'utf-8'))
+					data = JSON.parse(await fs.promises.readFile(dataFile, 'utf-8'))
 				} catch (e) {
 					// pass
 				}
@@ -548,17 +554,17 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 					})
 				}
 			}
-			
+
 			return map
 		} catch (e) {
 			throw new Error("Unable to read library data: " + e.message);
 		}
 	}
 
-	async readStatus(library: string) : Promise<{
+	async readStatus(library: string): Promise<{
 		collections: Map<string, ZoteroNoteStatus>;
 		items: Map<string, ZoteroNoteStatus>;
-	 }> {
+	}> {
 		// read library status from store
 		try {
 			const filePath = this.getPluginPath("store", `${encodeURIComponent(library)}.status.json`)
@@ -623,7 +629,7 @@ class ClientSettingTab extends PluginSettingTab {
 	}
 
 	display(): void {
-		const {containerEl} = this;
+		const { containerEl } = this;
 
 		containerEl.empty();
 
@@ -649,7 +655,7 @@ class ClientSettingTab extends PluginSettingTab {
 					}
 				}, 500)));
 
-		containerEl.createEl('h2', {text: 'Syncing'});
+		containerEl.createEl('h2', { text: 'Syncing' });
 
 		new Setting(containerEl)
 			.setName('Sync on startup')
@@ -660,7 +666,7 @@ class ClientSettingTab extends PluginSettingTab {
 					this.plugin.settings.sync_on_startup = value;
 					await this.plugin.saveSettings();
 				}
-			));
+				));
 
 		new Setting(containerEl)
 			.setName('Sync interval')
@@ -673,9 +679,9 @@ class ClientSettingTab extends PluginSettingTab {
 					await this.plugin.saveSettings();
 					this.plugin.applySyncInterval();
 				}
-			));
+				));
 
-		containerEl.createEl('h2', {text: 'Note generation'});
+		containerEl.createEl('h2', { text: 'Note generation' });
 
 		new Setting(containerEl)
 			.setName('Caching')
@@ -691,240 +697,240 @@ class ClientSettingTab extends PluginSettingTab {
 
 		if (this.plugin.client.libraries) {
 
-		const fpCodeEditor = document.createElement('textarea');
-		fpCodeEditor.classList.add('filepath-code-editor');
-		const ntCodeEditor = document.createElement('textarea');
-		ntCodeEditor.classList.add('note-code-editor');
+			const fpCodeEditor = document.createElement('textarea');
+			fpCodeEditor.classList.add('filepath-code-editor');
+			const ntCodeEditor = document.createElement('textarea');
+			ntCodeEditor.classList.add('note-code-editor');
 
-		new Setting(containerEl)
-			.setName('Template')
-			.setDesc(
-				'The JavaScript code in the left column below is used to generate the notes from items in your Zotero library.' +
-				' You can preview code changes by selecting a file from the preview list. ' +
-				' Once you are done, you can apply the changes to your vault by clicking the "Apply" button. '
-			)
-			.addButton(button => button
-				.setButtonText('Apply')
-				.onClick(async () => {
-					// save settings
-					button.setDisabled(true);
-					this.plugin.settings.filepath_generator = fpCodeEditor.value
-					this.plugin.settings.note_generator = ntCodeEditor.value
-					await this.plugin.saveSettings();
-					// apply changes
-					new Notice('Zotero Sync: Updating vault (this may take a while)');
-					await this.plugin.applyAllUpdates();
-					new Notice('Zotero Sync: Vault updated');
-					button.setDisabled(false);
-				})
-			);
+			new Setting(containerEl)
+				.setName('Template')
+				.setDesc(
+					'The JavaScript code in the left column below is used to generate the notes from items in your Zotero library.' +
+					' You can preview code changes by selecting a file from the preview list. ' +
+					' Once you are done, you can apply the changes to your vault by clicking the "Apply" button. '
+				)
+				.addButton(button => button
+					.setButtonText('Apply')
+					.onClick(async () => {
+						// save settings
+						button.setDisabled(true);
+						this.plugin.settings.filepath_generator = fpCodeEditor.value
+						this.plugin.settings.note_generator = ntCodeEditor.value
+						await this.plugin.saveSettings();
+						// apply changes
+						new Notice('Zotero Sync: Updating vault (this may take a while)');
+						await this.plugin.applyAllUpdates();
+						new Notice('Zotero Sync: Vault updated');
+						button.setDisabled(false);
+					})
+				);
 
-		// Filepath generation elements
+			// Filepath generation elements
 
-		const librarySelect = document.createElement('select');
-		librarySelect.classList.add('library-select');
-		let libraryCount = 0;
-		
-		for (const library of Object.values(this.plugin.client.libraries)) {
-			const option = document.createElement('option');
-			option.value = library.prefix;
-			option.text = '-- User library --';
-			if (library.type === 'group') {
-				option.text = library.name;
-			}
-			librarySelect.appendChild(option);
-			libraryCount++;
-		}
-		
-		const fpMsg = document.createElement("div");
-		fpMsg.classList.add('fp-msg');
-		fpMsg.innerText = 'Use `data` to access the Zotero item data and return a relative filepath. '
-					+ 'You may return an empty string to skip note generation for the item. ';
+			const librarySelect = document.createElement('select');
+			librarySelect.classList.add('library-select');
+			let libraryCount = 0;
 
-
-		fpCodeEditor.value = this.plugin.settings.filepath_generator;
-
-		const filterInput = document.createElement('input');
-		filterInput.classList.add('filter-input');
-		filterInput.type = 'text';
-		filterInput.placeholder = 'Filter files';
-	
-		const fileSelect = document.createElement('select');
-		fileSelect.classList.add('file-select');
-		fileSelect.multiple = true;
-		fileSelect.style.border =  'none';
-
-		const filter = debounce(() => {
-			const filterValue = filterInput.value.toLowerCase();
-			const predicate = prepareFuzzySearch(filterValue);
-			for (let i = 0; i < fileSelect.options.length; i++) {
-			  const option = fileSelect.options[i];
-			  // option.style.display = option.text.toLowerCase().includes(filterValue) ? '' : 'none';
-			  option.style.display = predicate(option.text.toLowerCase()) ? '' : 'none';
-			}
-		}, 100);
-		filterInput.addEventListener('input', filter);
-
-
-		// Note generation elements
-		const ntMsg = document.createElement("div");
-		ntMsg.classList.add('nt-msg');
-		ntMsg.innerText = 'Use `data` to access the Zotero item data and return the note content';
-
-		ntCodeEditor.value = this.plugin.settings.note_generator;
-
-		const ntPreviewToggle = document.createElement('select');
-		ntPreviewToggle.classList.add('nt-preview-toggle');
-		const options = {
-			// md_prev: 'View markdown preview', 
-			md: 'View generated markdown source', 
-			json: 'View JSON data'
-		}
-		Object.entries(options).forEach(([value, name]) => {
-			const option = document.createElement('option');
-			option.value = value;
-			option.text = name;
-			ntPreviewToggle.appendChild(option);
-		});
-		
-		const ntPreview = document.createElement('pre');
-		ntPreview.classList.add('nt-preview');
-		ntPreview.empty();
-
-		// Refresh preview logic
-		const refreshPreview = async () => {
-			const library = this.plugin.client.libraries[librarySelect.value];
-			const data = await this.plugin.readLibrary(library.prefix);
-
-			// parse file names
-			let fileNames = [];
-			for (const item of data.collections.values()) {
-				try {
-					const fp = this.plugin.generateNoteFilePath(item, data.collections, data.items, library, fpCodeEditor.value);
-					if (fp) {
-						fileNames.push({
-							name: fp,
-							value: item.key
-						});
-					}
-					fpCodeEditor.classList.remove('zotero-sync-settings-error');
-				} catch (e) {
-					// display full error in preview
-					ntPreview.innerText = e;
-					fpCodeEditor.classList.add('zotero-sync-settings-error')
-					return;
+			for (const library of Object.values(this.plugin.client.libraries)) {
+				const option = document.createElement('option');
+				option.value = library.prefix;
+				option.text = '-- User library --';
+				if (library.type === 'group') {
+					option.text = library.name;
 				}
-			}
-			for (const item of data.items.values()) {
-				try {
-					const fp = this.plugin.generateNoteFilePath(item, data.collections, data.items, library, fpCodeEditor.value);
-					if (fp) {
-						fileNames.push({
-							name: fp,
-							value: item.key
-						});
-					}
-					fpCodeEditor.classList.remove('zotero-sync-settings-error');
-				} catch (e) {
-					// display full error in preview
-					ntPreview.innerText = e;
-					fpCodeEditor.classList.add('zotero-sync-settings-error')
-					return;
-				}
+				librarySelect.appendChild(option);
+				libraryCount++;
 			}
 
-			// update file select
-			const activeSelection = fileSelect.selectedOptions[0]?.value;
-			fileSelect.innerHTML = '';
-			fileNames.forEach(({name, value}) => {
+			const fpMsg = document.createElement("div");
+			fpMsg.classList.add('fp-msg');
+			fpMsg.innerText = 'Use `data` to access the Zotero item data and return a relative filepath. '
+				+ 'You may return an empty string to skip note generation for the item. ';
+
+
+			fpCodeEditor.value = this.plugin.settings.filepath_generator;
+
+			const filterInput = document.createElement('input');
+			filterInput.classList.add('filter-input');
+			filterInput.type = 'text';
+			filterInput.placeholder = 'Filter files';
+
+			const fileSelect = document.createElement('select');
+			fileSelect.classList.add('file-select');
+			fileSelect.multiple = true;
+			fileSelect.style.border = 'none';
+
+			const filter = debounce(() => {
+				const filterValue = filterInput.value.toLowerCase();
+				const predicate = prepareFuzzySearch(filterValue);
+				for (let i = 0; i < fileSelect.options.length; i++) {
+					const option = fileSelect.options[i];
+					// option.style.display = option.text.toLowerCase().includes(filterValue) ? '' : 'none';
+					option.style.display = predicate(option.text.toLowerCase()) ? '' : 'none';
+				}
+			}, 100);
+			filterInput.addEventListener('input', filter);
+
+
+			// Note generation elements
+			const ntMsg = document.createElement("div");
+			ntMsg.classList.add('nt-msg');
+			ntMsg.innerText = 'Use `data` to access the Zotero item data and return the note content';
+
+			ntCodeEditor.value = this.plugin.settings.note_generator;
+
+			const ntPreviewToggle = document.createElement('select');
+			ntPreviewToggle.classList.add('nt-preview-toggle');
+			const options = {
+				// md_prev: 'View markdown preview', 
+				md: 'View generated markdown source',
+				json: 'View JSON data'
+			}
+			Object.entries(options).forEach(([value, name]) => {
 				const option = document.createElement('option');
 				option.value = value;
 				option.text = name;
-				fileSelect.appendChild(option);
+				ntPreviewToggle.appendChild(option);
 			});
-			// restore active selection
-			if (activeSelection) {
-				fileSelect.value = activeSelection;
-			}
-			// if none selected, select first item
-			if (!fileSelect.value && fileSelect.options.length > 0) {
-				fileSelect.value = fileSelect.options[0].value;
-			}
 
-			if (fileSelect.options.length === 0) {
-				ntPreview.innerText = 'No files to preview';
-				return;
-			}
+			const ntPreview = document.createElement('pre');
+			ntPreview.classList.add('nt-preview');
+			ntPreview.empty();
 
-			// update preview
-			const element = data.items.get(fileSelect.value) || {} as ZoteroItem;
-			element.marker = this.plugin.getMarker(element, library);
-			const previewType = ntPreviewToggle.value;
-			if (previewType === 'md') {
-				try {
-					let note =  this.plugin.generateNote(element, data.collections, data.items, library, ntCodeEditor.value);
-					if (!note.includes(element.marker)) {
-						note = element.marker + '\n\n' + note;
+			// Refresh preview logic
+			const refreshPreview = async () => {
+				const library = this.plugin.client.libraries[librarySelect.value];
+				const data = await this.plugin.readLibrary(library.prefix);
+
+				// parse file names
+				let fileNames = [];
+				for (const item of data.collections.values()) {
+					try {
+						const fp = this.plugin.generateNoteFilePath(item, data.collections, data.items, library, fpCodeEditor.value);
+						if (fp) {
+							fileNames.push({
+								name: fp,
+								value: item.key
+							});
+						}
+						fpCodeEditor.classList.remove('zotero-sync-settings-error');
+					} catch (e) {
+						// display full error in preview
+						ntPreview.innerText = e;
+						fpCodeEditor.classList.add('zotero-sync-settings-error')
+						return;
 					}
-					ntPreview.innerText = note;
-					ntCodeEditor.classList.remove('zotero-sync-settings-error');
-				} catch (e) {
-					// display full error in preview
-					ntPreview.innerText = e;
-					ntCodeEditor.classList.add('zotero-sync-settings-error')
-					return;	
 				}
-			} else if (previewType === 'md_prev') {
-				// todo: add markdown preview
-			} else if (previewType === 'json') {
-				ntPreview.innerText = JSON.stringify(element, null, 2);
-			}
-
-		}
-
-		// Refresh preview on change
-		librarySelect.addEventListener('change', refreshPreview);
-		fileSelect.addEventListener('change', refreshPreview);
-		ntPreviewToggle.addEventListener('change', refreshPreview);
-		fpCodeEditor.addEventListener('input', debounce(refreshPreview, 1000));
-		ntCodeEditor.addEventListener('input', debounce(refreshPreview, 1000));
-
-		
-		// Form grid layout
-		const table = containerEl.createEl("table");
-		table.classList.add('form-grid');
-		for (let i = 0; i < 2; i++) {
-			const row = document.createElement("tr");
-			for (let j = 0; j < 2; j++) {
-				const cell = document.createElement("td");
-
-				const formContainer = document.createElement("div");
-				formContainer.classList.add('form-container');
-
-				if (i === 0 && j === 0) {
-					formContainer.appendChild(fpMsg);
-					formContainer.appendChild(fpCodeEditor);
-				} else if (i === 0 && j === 1) {
-					if (libraryCount > 1) {
-						formContainer.appendChild(librarySelect);
+				for (const item of data.items.values()) {
+					try {
+						const fp = this.plugin.generateNoteFilePath(item, data.collections, data.items, library, fpCodeEditor.value);
+						if (fp) {
+							fileNames.push({
+								name: fp,
+								value: item.key
+							});
+						}
+						fpCodeEditor.classList.remove('zotero-sync-settings-error');
+					} catch (e) {
+						// display full error in preview
+						ntPreview.innerText = e;
+						fpCodeEditor.classList.add('zotero-sync-settings-error')
+						return;
 					}
-					formContainer.appendChild(filterInput);
-					formContainer.appendChild(fileSelect);
-				} else if (i === 1 && j === 0) {
-					formContainer.appendChild(ntMsg);
-					formContainer.appendChild(ntCodeEditor);
-				} else if (i === 1 && j === 1) {
-					formContainer.appendChild(ntPreviewToggle);
-					formContainer.appendChild(ntPreview);
 				}
 
-				cell.appendChild(formContainer);
-				row.appendChild(cell);
-			}
-			table.appendChild(row);
-		}
+				// update file select
+				const activeSelection = fileSelect.selectedOptions[0]?.value;
+				fileSelect.innerHTML = '';
+				fileNames.forEach(({ name, value }) => {
+					const option = document.createElement('option');
+					option.value = value;
+					option.text = name;
+					fileSelect.appendChild(option);
+				});
+				// restore active selection
+				if (activeSelection) {
+					fileSelect.value = activeSelection;
+				}
+				// if none selected, select first item
+				if (!fileSelect.value && fileSelect.options.length > 0) {
+					fileSelect.value = fileSelect.options[0].value;
+				}
 
-		refreshPreview();
+				if (fileSelect.options.length === 0) {
+					ntPreview.innerText = 'No files to preview';
+					return;
+				}
+
+				// update preview
+				const element = data.items.get(fileSelect.value) || {} as ZoteroItem;
+				element.marker = this.plugin.getMarker(element, library);
+				const previewType = ntPreviewToggle.value;
+				if (previewType === 'md') {
+					try {
+						let note = this.plugin.generateNote(element, data.collections, data.items, library, ntCodeEditor.value);
+						if (!note.includes(element.marker)) {
+							note = element.marker + '\n\n' + note;
+						}
+						ntPreview.innerText = note;
+						ntCodeEditor.classList.remove('zotero-sync-settings-error');
+					} catch (e) {
+						// display full error in preview
+						ntPreview.innerText = e;
+						ntCodeEditor.classList.add('zotero-sync-settings-error')
+						return;
+					}
+				} else if (previewType === 'md_prev') {
+					// todo: add markdown preview
+				} else if (previewType === 'json') {
+					ntPreview.innerText = JSON.stringify(element, null, 2);
+				}
+
+			}
+
+			// Refresh preview on change
+			librarySelect.addEventListener('change', refreshPreview);
+			fileSelect.addEventListener('change', refreshPreview);
+			ntPreviewToggle.addEventListener('change', refreshPreview);
+			fpCodeEditor.addEventListener('input', debounce(refreshPreview, 1000));
+			ntCodeEditor.addEventListener('input', debounce(refreshPreview, 1000));
+
+
+			// Form grid layout
+			const table = containerEl.createEl("table");
+			table.classList.add('form-grid');
+			for (let i = 0; i < 2; i++) {
+				const row = document.createElement("tr");
+				for (let j = 0; j < 2; j++) {
+					const cell = document.createElement("td");
+
+					const formContainer = document.createElement("div");
+					formContainer.classList.add('form-container');
+
+					if (i === 0 && j === 0) {
+						formContainer.appendChild(fpMsg);
+						formContainer.appendChild(fpCodeEditor);
+					} else if (i === 0 && j === 1) {
+						if (libraryCount > 1) {
+							formContainer.appendChild(librarySelect);
+						}
+						formContainer.appendChild(filterInput);
+						formContainer.appendChild(fileSelect);
+					} else if (i === 1 && j === 0) {
+						formContainer.appendChild(ntMsg);
+						formContainer.appendChild(ntCodeEditor);
+					} else if (i === 1 && j === 1) {
+						formContainer.appendChild(ntPreviewToggle);
+						formContainer.appendChild(ntPreview);
+					}
+
+					cell.appendChild(formContainer);
+					row.appendChild(cell);
+				}
+				table.appendChild(row);
+			}
+
+			refreshPreview();
 
 		} // end of connected-only settings
 	}

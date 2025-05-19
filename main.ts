@@ -10,6 +10,7 @@ import {
 	Notice,
 	debounce,
 	addIcon,
+	requestUrl,
 	prepareFuzzySearch,
 	TAbstractFile
 } from 'obsidian';
@@ -226,7 +227,7 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 		}
 	}
 
-	async sync(debounce_seconds: number = 0) {
+	async sync(debounce_seconds = 0) {
 		// check if sync has been completed recently
 		if (this.last_sync && debounce_seconds > 0) {
 			const now = new Date()
@@ -237,10 +238,10 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 			}
 		}
 
-		if (true) { // note: you may want to disable the sync during
-			//       development to avoid hitting API limits
-			await this.syncWithZotero()
-		}
+		// note: you may want to disable the sync during
+		//       development to avoid hitting API limits
+		await this.syncWithZotero()
+
 
 		await this.applyAllUpdates()
 
@@ -468,6 +469,77 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 		return `[🇿](zotero://select${domain}/${kind}/${element.key})`
 	}
 
+	sanitizeZoteroKey(key: string | null): string | null {
+		if (!key) {
+			return null;
+		}
+		// 8 alphanumeric characters
+		const zoteroKeyPattern = /^[A-Za-z0-9]{8}$/;
+		const trimmedKey = key.trim();
+		if (zoteroKeyPattern.test(trimmedKey)) {
+			return trimmedKey;
+		}
+		return null;
+	}
+
+	findHeader(headers: Record<string, string>, headerName: string, defaultValue = ''): string {
+		const key = Object.keys(headers).find(
+			key => key.toLowerCase() === headerName.toLowerCase()
+		);
+		return key ? headers[key] : defaultValue;
+	}
+
+	async fetchImageAsBase64(url: string): Promise<string> {
+		try {
+			const response = await requestUrl({
+				'url': url,
+				headers: {
+					'Accept': 'image/*',
+					'Authorization': `Bearer ${this.settings.api_key}`
+				}
+			});
+
+			if (!response.status || response.status !== 200) {
+				throw new Error(`Image fetch failed: ${response.status}`);
+			}
+
+			const arrayBuffer = await response.arrayBuffer;
+			const bytes = new Uint8Array(arrayBuffer);
+			let binary = '';
+			for (let i = 0; i < bytes.length; i++) {
+				binary += String.fromCharCode(bytes[i]);
+			}
+
+			const base64 = window.btoa(binary);
+			const contentType = this.findHeader(response.headers, 'content-type', 'image/jpeg');
+			return `data:${contentType};base64,${base64}`;
+		} catch (error) {
+			console.error('Failed to fetch image:', error);
+			return '';
+		}
+	}
+
+	async transformAttachmentImgTags(html: string): Promise<string> {
+		const parser = new DOMParser();
+		const doc = parser.parseFromString(html, "text/html");
+		const imgElements = doc.querySelectorAll("img[data-attachment-key]");
+
+		const promises = Array.from(imgElements).map(async (img) => {
+			const attKey = this.sanitizeZoteroKey(img.getAttribute("data-attachment-key"));
+			if (attKey) {
+				const fileUrl = `https://api.zotero.org/users/${this.client.userID}/items/${attKey}/file`;
+				const base64Data = await this.fetchImageAsBase64(fileUrl);
+				if (base64Data) {
+					img.setAttribute("src", base64Data);
+				}
+			}
+		});
+
+		await Promise.all(promises);
+
+		return doc.body.innerHTML;
+	}
+
 	async readLibrary(library: string): Promise<{
 		collections: Map<string, ZoteroCollectionItem>;
 		items: Map<string, ZoteroItem>;
@@ -493,13 +565,23 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 				collections: new Map(data.collections.map((c: ZoteroCollectionItem) => [c.key, c])),
 				items: new Map(data.items.map((i: ZoteroItem) => {
 					if (i.itemType.toLowerCase() === 'note' && i.note) {
+						// convert without images
 						i.note_markdown = htmlToMarkdown(i.note);
 					}
 					return [i.key, i]
 				}))
 			}
+
+			// fetch attachments
+			for (const item of map.items.values()) {
+				if (item.itemType.toLowerCase() === 'note' && item.note) {
+					const transformedHtml = await this.transformAttachmentImgTags(item.note);
+					item.note_markdown = htmlToMarkdown(transformedHtml);
+				}
+			}
+
 			// rewrite any collection with parentCollection key to be nested in its parent
-			for (const [key, collection] of map.collections) {
+			for (const collection of map.collections.values()) {
 				if (!collection.itemType) {
 					collection.itemType = "collection"
 				}
@@ -584,7 +666,10 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 		}
 	}
 
-	async writeStatus(library: string, status: any) {
+	async writeStatus(library: string, status: {
+		collections: Map<string, ZoteroNoteStatus>;
+		items: Map<string, ZoteroNoteStatus>;
+	}) {
 		// write library status to store
 		try {
 			const filePath = this.getPluginPath("store", `${encodeURIComponent(library)}.status.json`)
@@ -803,7 +888,7 @@ class ClientSettingTab extends PluginSettingTab {
 				const data = await this.plugin.readLibrary(library.prefix);
 
 				// parse file names
-				let fileNames = [];
+				const fileNames = [];
 				for (const item of data.collections.values()) {
 					try {
 						const fp = this.plugin.generateNoteFilePath(item, data.collections, data.items, library, fpCodeEditor.value);

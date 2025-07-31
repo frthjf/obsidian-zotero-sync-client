@@ -2,7 +2,7 @@
 
 This plugin leverages the Zotero Sync API to mirror your Zotero library as markdown files within Obsidian.
 
-Zotero does not have to be installed since the data is directly obtained from Zotero's web API - all you need is an [Zotero API key](https://www.zotero.org/settings/keys/new) and internet connection when syncing.
+Zotero does not have to be installed since the data is directly obtained from Zotero's web API - all you need is an [Zotero API key](https://www.zotero.org/settings/keys/new) and internet connection when syncing. Alternatively, you can enable synchronization with your locally installed Zotero App.
 
 Note that, by design, the synchronization is *read-only* and does not modify your Zotero library. Any changes to the markdown files will be lost and *not* synced back into Zotero. The rationale is to enable seamless Zotero integration via note linking and search while keeping all literature data within Zotero.
 
@@ -18,7 +18,7 @@ This plugin is for you if you are interested in linking to and searching through
 
 ## Usage
 
-Install the plugin and enable it in the settings. Generate a [Zotero API key](https://www.zotero.org/settings/keys/new) and fill it in the plugin settings.
+Install the plugin and enable it in the settings. Generate a [Zotero API key](https://www.zotero.org/settings/keys/new) and fill it in the plugin settings. Alternatively, you can enable the local API in your Zotero App and enable local sync (Zotero > Settings > Advanced > Allow other applications on this computer to communicate with Zotero).
 
 The plugin will sync and cache all Zotero data incremently to minimize API usage.
 

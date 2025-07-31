@@ -10,7 +10,6 @@ import {
 	Notice,
 	debounce,
 	addIcon,
-	requestUrl,
 	prepareFuzzySearch,
 	TAbstractFile
 } from 'obsidian';
@@ -20,9 +19,16 @@ import { Zotero } from '@retorquere/zotero-sync/typings/zotero'
 import path from 'path';
 import fs from "fs";
 import crypto from "crypto";
+import nfetch from "node-fetch";
 
 const md5 = (string: string): string => {
 	return crypto.createHash('md5').update(string).digest('hex');
+}
+
+class CorsFreeZoteroAPI extends ZoteroAPI {
+	protected async fetch(url: string) {
+		return await nfetch(url, { headers: this.headers })
+	}
 }
 
 type ZoteroCollectionItem = Zotero.Collection["data"] & {
@@ -48,7 +54,7 @@ type ZoteroNoteStatus = {
 }
 
 type ZoteroRemoteLibrary = {
-	type: 'group' | 'user';
+	type: 'group' | 'user' | 'local';
 	prefix: string;
 	name: string;
 	version?: number;
@@ -56,6 +62,7 @@ type ZoteroRemoteLibrary = {
 
 interface ZoteroSyncClientSettings {
 	api_key: string;
+	local_sync_enabled: boolean;
 	sync_on_startup: boolean;
 	sync_on_interval: boolean;
 	sync_interval: number;
@@ -65,6 +72,7 @@ interface ZoteroSyncClientSettings {
 
 const DEFAULT_SETTINGS: ZoteroSyncClientSettings = {
 	api_key: '',
+	local_sync_enabled: false,
 	sync_on_startup: true,
 	sync_on_interval: false,
 	sync_interval: 0,
@@ -111,7 +119,7 @@ return 'References/' + fp;
 export default class ZoteroSyncClientPlugin extends Plugin {
 	settings: ZoteroSyncClientSettings;
 	store_directory: string | undefined;
-	client: ZoteroAPI;
+	client: CorsFreeZoteroAPI;
 	last_sync: Date;
 	interval: number;
 
@@ -139,8 +147,8 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 		}
 
 		// initialize the API client
-		this.client = new ZoteroAPI
-		this.client.on(ZoteroAPI.event.error, function () { console.log("ERROR!", [...arguments]) })
+		this.client = new CorsFreeZoteroAPI
+		this.client.on(CorsFreeZoteroAPI.event.error, function () { console.log("ERROR!", [...arguments]) })
 		// for (const event of [ ZoteroAPI.event.library, ZoteroAPI.event.collection, ZoteroAPI.event.item ]) {
 		// 	this.client.on(event, (e => function() { console.log(e, [...arguments]) })(event))
 		// }
@@ -158,6 +166,15 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 		});
 
 		this.applySyncInterval()
+
+		if (this.settings.local_sync_enabled) {
+			try {
+				const response = await nfetch("http://localhost:23119/api/users/0/groups");
+				if (!response.ok) throw new Error
+			} catch (e) {
+				return;
+			}
+		}
 
 		// authenticate
 		try {
@@ -202,11 +219,20 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 	}
 
 	async authenticate(key?: string) {
+		if (this.settings.local_sync_enabled) {
+			try {
+				await this.client.local()
+			} catch (e) {
+				throw new Error(e.message);
+			}
+			return;
+		}
+
 		if (!key) {
 			key = this.settings.api_key
 		}
 		if (!/\S/.test(key)) {
-			throw new Error("Please enter your Zotero API key");
+			throw new Error("Please enter your Zotero API key or enable local sync");
 		}
 
 		try {
@@ -238,10 +264,20 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 			}
 		}
 
+		// if in local mode, check if Zotero is running
+		if (this.settings.local_sync_enabled) {
+			try {
+				const response = await nfetch("http://localhost:23119/api/users/0/groups");
+				if (!response.ok) throw new Error
+			} catch (e) {
+				new Notice(`Zotero Sync: Cannot connect to API. Is Zotero running?`)
+				return false;
+			}
+		}
+
 		// note: you may want to disable the sync during
 		//       development to avoid hitting API limits
 		await this.syncWithZotero()
-
 
 		await this.applyAllUpdates()
 
@@ -491,19 +527,34 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 
 	async fetchImageAsBase64(url: string): Promise<string> {
 		try {
-			const response = await requestUrl({
-				'url': url,
-				headers: {
-					'Accept': 'image/*',
-					'Authorization': `Bearer ${this.settings.api_key}`
-				}
-			});
+			const headers: Record<string, string> = {
+				'Accept': 'image/*'
+			};
 
-			if (!response.status || response.status !== 200) {
+			let response;
+			if (!this.settings.local_sync_enabled) {
+				headers['Authorization'] = `Bearer ${this.settings.api_key}`;
+				response = await nfetch(url, { headers });
+			} else {
+				response = await nfetch(url, { headers, redirect: 'manual' });
+				if (response.headers.get('location')?.startsWith('file://')) {
+					// load local files directly
+					const localUrl = response.headers.get('location')?.replace('file://', '')
+					if (localUrl) {
+						const fileBuffer = await fs.promises.readFile(localUrl);
+						const base64 = fileBuffer.toString('base64');
+						const ext = path.extname(localUrl).slice(1) || 'jpeg';
+						const contentType = `image/${ext}`;
+						return `data:${contentType};base64,${base64}`;
+					}
+				}
+			}
+
+			if (!response.ok) {
 				throw new Error(`Image fetch failed: ${response.status}`);
 			}
 
-			const arrayBuffer = await response.arrayBuffer;
+			const arrayBuffer = await response.arrayBuffer();
 			const bytes = new Uint8Array(arrayBuffer);
 			let binary = '';
 			for (let i = 0; i < bytes.length; i++) {
@@ -511,10 +562,10 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 			}
 
 			const base64 = window.btoa(binary);
-			const contentType = this.findHeader(response.headers, 'content-type', 'image/jpeg');
+			const contentType = response.headers.get('content-type') || 'image/jpeg';
 			return `data:${contentType};base64,${base64}`;
 		} catch (error) {
-			console.error('Failed to fetch image:', error);
+			console.error('Failed to fetch image:', url, error);
 			return '';
 		}
 	}
@@ -527,7 +578,10 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 		const promises = Array.from(imgElements).map(async (img) => {
 			const attKey = this.sanitizeZoteroKey(img.getAttribute("data-attachment-key"));
 			if (attKey) {
-				const fileUrl = `https://api.zotero.org/users/${this.client.userID}/items/${attKey}/file`;
+				const baseUrl = this.settings.local_sync_enabled
+					? 'http://localhost:23119/api'
+					: 'https://api.zotero.org';
+				const fileUrl = `${baseUrl}/users/${this.client.userID}/items/${attKey}/file`;
 				const base64Data = await this.fetchImageAsBase64(fileUrl);
 				if (base64Data) {
 					img.setAttribute("src", base64Data);
@@ -558,7 +612,7 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 					// pass
 				}
 			}
-			let map: {
+			const map: {
 				collections: Map<string, ZoteroCollectionItem>;
 				items: Map<string, ZoteroItem>;
 			} = {
@@ -698,7 +752,11 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 
 	async clearCache() {
 		for (const library of Object.values(this.client.libraries)) {
-			await this.clearStatus(library.prefix)
+			try {
+				await this.clearStatus(library.prefix)
+			} catch (e) {
+				console.error(e)
+			}
 		}
 		new Notice(`Zotero Sync: Cleared cache`)
 	}
@@ -720,25 +778,63 @@ class ClientSettingTab extends PluginSettingTab {
 
 		containerEl.classList.add('zotero-sync-settings');
 
-		new Setting(containerEl)
+		const isLocalSync = this.plugin.settings.local_sync_enabled;
+
+		const apiKeySetting = new Setting(containerEl)
 			.setName('API key')
 			.setDesc('Zotero API key for read-only access')
-			.addText(text => text
-				.setPlaceholder('Enter your secret API key')
-				.setValue(this.plugin.settings.api_key)
-				.onChange(debounce(async (value) => {
-					try {
-						await this.plugin.authenticate(value);
-						this.plugin.settings.api_key = value;
+			.addText(text => {
+				return text
+					.setPlaceholder(isLocalSync ? 'Local sync enabled' : 'Enter your secret API key')
+					.setValue(isLocalSync ? '' : this.plugin.settings.api_key)
+					.setDisabled(isLocalSync)
+					.onChange(debounce(async (value) => {
+						if (isLocalSync) return;
+						try {
+							await this.plugin.authenticate(value);
+							this.plugin.settings.api_key = value;
+							await this.plugin.saveSettings();
+							new Notice(`Authenticated with Zotero, syncing libraries. This may take a while...`)
+							await this.plugin.sync();
+							new Notice(`Zotero Sync complete.`)
+							this.display();
+						} catch (e) {
+							this.plugin.showError(e, "Failed to authenticate with Zotero")
+						}
+					}, 500))
+			});
+		if (isLocalSync) {
+			apiKeySetting.settingEl.style.display = 'none';
+		}
+
+		new Setting(containerEl)
+			.setName('Local sync')
+			.setDesc('Read from your locally running Zotero App instead of using the web API')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.local_sync_enabled)
+				.onChange(async (value) => {
+					await this.plugin.clearCache();
+					if (value) {
+						try {
+							apiKeySetting.settingEl.style.display = 'none';
+							this.plugin.settings.local_sync_enabled = true;
+							await this.plugin.saveSettings();
+							await this.plugin.authenticate();
+							new Notice(`Switched to local sync, syncing libraries. This may take a while...`)
+							await this.plugin.sync();
+							new Notice(`Zotero Sync complete.`)
+							this.display();
+						} catch (e) {
+							apiKeySetting.settingEl.style.display = 'block';
+							this.plugin.showError(e, "Failed to enable local sync")
+						}
+					} else {
+						apiKeySetting.settingEl.style.display = 'block';
+						this.plugin.settings.local_sync_enabled = false;
 						await this.plugin.saveSettings();
-						new Notice(`Authenticated with Zotero, syncing libraries. This may take a while...`)
-						await this.plugin.sync();
-						new Notice(`Zotero Sync complete.`)
 						this.display();
-					} catch (e) {
-						this.plugin.showError(e, "Failed to authenticate with Zotero")
 					}
-				}, 500)));
+				}));
 
 		containerEl.createEl('h2', { text: 'Syncing' });
 
@@ -822,6 +918,8 @@ class ClientSettingTab extends PluginSettingTab {
 				option.text = '-- User library --';
 				if (library.type === 'group') {
 					option.text = library.name;
+				} else if (library.name == '') {
+					option.text = 'Local';
 				}
 				librarySelect.appendChild(option);
 				libraryCount++;

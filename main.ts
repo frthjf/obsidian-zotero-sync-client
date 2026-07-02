@@ -11,7 +11,8 @@ import {
 	debounce,
 	addIcon,
 	prepareFuzzySearch,
-	TAbstractFile
+	TAbstractFile,
+	requestUrl
 } from 'obsidian';
 import { Sync as ZoteroAPI } from '@retorquere/zotero-sync/index'
 import { Store } from '@retorquere/zotero-sync/json-store'
@@ -19,7 +20,7 @@ import { Zotero } from '@retorquere/zotero-sync/typings/zotero'
 import path from 'path';
 import fs from "fs";
 import crypto from "crypto";
-import nfetch from "node-fetch";
+import Handlebars from 'handlebars';
 
 const md5 = (string: string): string => {
 	return crypto.createHash('md5').update(string).digest('hex');
@@ -27,7 +28,7 @@ const md5 = (string: string): string => {
 
 class CorsFreeZoteroAPI extends ZoteroAPI {
 	protected async fetch(url: string) {
-		return await nfetch(url, { headers: this.headers })
+		return await requestUrl({ url, headers: this.headers })
 	}
 }
 
@@ -169,8 +170,8 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 
 		if (this.settings.local_sync_enabled) {
 			try {
-				const response = await nfetch("http://localhost:23119/api/users/0/groups");
-				if (!response.ok) throw new Error
+				const response = await requestUrl({ url: "http://localhost:23119/api/users/0/groups" });
+				if (response.status < 200 || response.status >= 300) throw new Error
 			} catch (e) {
 				return;
 			}
@@ -267,8 +268,8 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 		// if in local mode, check if Zotero is running
 		if (this.settings.local_sync_enabled) {
 			try {
-				const response = await nfetch("http://localhost:23119/api/users/0/groups");
-				if (!response.ok) throw new Error
+				const response = await requestUrl({ url: "http://localhost:23119/api/users/0/groups" });
+				if (response.status !== 200) throw new Error
 			} catch (e) {
 				new Notice(`Zotero Sync: Cannot connect to API. Is Zotero running?`)
 				return false;
@@ -474,15 +475,20 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 		if (!template) {
 			template = this.settings.filepath_generator
 		}
-		const parse = new Function('data', '$collections', '$items', '$library', template)
-		const result = parse(data, collections, items, library)
-		if (result) {
-			if (result.endsWith('.md')) {
-				return normalizePath(result)
+		try {
+			const compiledTemplate = Handlebars.compile(template)
+			const result = compiledTemplate({ data, $collections: collections, $items: items, $library: library })
+			if (result) {
+				if (result.endsWith('.md')) {
+					return normalizePath(result)
+				}
+				return normalizePath(result + '.md')
+			} else {
+				return ""
 			}
-			return normalizePath(result + '.md')
-		} else {
-			return ""
+		} catch (error) {
+			console.error('Error compiling filepath template:', error);
+			return "";
 		}
 	}
 
@@ -490,8 +496,13 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 		if (!template) {
 			template = this.settings.note_generator
 		}
-		const parse = new Function('data', '$collections', '$items', '$library', template)
-		return parse(data, collections, items, library)
+		try {
+			const compiledTemplate = Handlebars.compile(template)
+			return compiledTemplate({ data, $collections: collections, $items: items, $library: library })
+		} catch (error) {
+			console.error('Error compiling note template:', error);
+			return '';
+		}
 	}
 
 	getMarker(element: ZoteroCollectionItem | ZoteroItem, library: ZoteroRemoteLibrary) {
@@ -534,12 +545,16 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 			let response;
 			if (!this.settings.local_sync_enabled) {
 				headers['Authorization'] = `Bearer ${this.settings.api_key}`;
-				response = await nfetch(url, { headers });
+				response = await requestUrl({ url, headers });
 			} else {
-				response = await nfetch(url, { headers, redirect: 'manual' });
-				if (response.headers.get('location')?.startsWith('file://')) {
+				response = await requestUrl({ url, headers });
+				// Check for redirect location header for local files
+				const location = response.headers instanceof Headers 
+					? response.headers.get('location')
+					: response.headers['location'];
+				if (location?.startsWith('file://')) {
 					// load local files directly
-					const localUrl = response.headers.get('location')?.replace('file://', '')
+					const localUrl = location.replace('file://', '')
 					if (localUrl) {
 						const fileBuffer = await fs.promises.readFile(localUrl);
 						const base64 = fileBuffer.toString('base64');
@@ -550,11 +565,15 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 				}
 			}
 
-			if (!response.ok) {
+			if (response.status < 200 || response.status >= 300) {
 				throw new Error(`Image fetch failed: ${response.status}`);
 			}
 
-			const arrayBuffer = await response.arrayBuffer();
+			const arrayBuffer = response.arrayBuffer;
+			if (!arrayBuffer) {
+				throw new Error('Failed to retrieve image data');
+			}
+			
 			const bytes = new Uint8Array(arrayBuffer);
 			let binary = '';
 			for (let i = 0; i < bytes.length; i++) {
@@ -562,7 +581,10 @@ export default class ZoteroSyncClientPlugin extends Plugin {
 			}
 
 			const base64 = window.btoa(binary);
-			const contentType = response.headers.get('content-type') || 'image/jpeg';
+			const contentTypeHeader = response.headers instanceof Headers 
+				? response.headers.get('content-type')
+				: response.headers['content-type'];
+			const contentType = contentTypeHeader || 'image/jpeg';
 			return `data:${contentType};base64,${base64}`;
 		} catch (error) {
 			console.error('Failed to fetch image:', url, error);

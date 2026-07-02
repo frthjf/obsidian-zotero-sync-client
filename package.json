@@ -22,10 +22,10 @@
 		"typescript": "4.7.4"
 	},
 	"dependencies": {
-		"@retorquere/zotero-sync": "github:frthjf/zotero-sync#build"
+		"@retorquere/zotero-sync": "github:frthjf/zotero-sync#build",
+		"handlebars": "^4.7.7"
 	},
 	"overrides": {
-		"node-fetch": "^3.3.2",
 		"json-stringify-pretty-compact": "^3.0.0"
 	}
 }
